@@ -56,7 +56,7 @@ class PerVariable:
         states: dict[str, Any] = {}
         for key, da in items.items():
             scaler = self._scaler_for(key)
-            if scaler == "passthrough":
+            if scaler == "passthrough" or scaler == "drop":
                 continue
             states[key] = scaler.compute(da)
         return states
@@ -65,6 +65,8 @@ class PerVariable:
         out: dict[str, Any] = {}
         for key, da in flatten(X).items():
             scaler = self._scaler_for(key)
+            if scaler == "drop":
+                continue
             st = state.get(key)
             if st is None:
                 out[key] = da
@@ -75,11 +77,12 @@ class PerVariable:
     def inverse_transform(self, X: Any, state: Mapping[str, Any]) -> Any:
         out: dict[str, Any] = {}
         for key, da in flatten(X).items():
+            scaler = self._scaler_for(key)
             st = state.get(key)
-            if st is None:
+            if st is None or scaler == "drop":
                 out[key] = da
             else:
-                out[key] = self._scaler_for(key).inverse_transform(da, st)
+                out[key] = scaler.inverse_transform(da, st)
         return reassemble(X, out)
 
     def affine_view(self, state: Mapping[str, Any]) -> dict[str, Any]:

@@ -83,6 +83,14 @@ uvx prek run --all-files          # hooks (prek), when installed
 Conventional, informative commit messages; tests live in `tests/`; keep the
 flagship cross-backend parity test passing before any refactor.
 
+## Ergonomics
+
+- ``pipe["name"]`` → the fitted bound step (transformer + its state slice) —
+  apply one fitted transformation to new data: ``pipe["media"].transform(...)``.
+- ``make_pipeline(*steps)`` auto-names from transformer classes
+  (``zscore``, ``zscore-1``, ...); ``"passthrough"`` is a valid step value;
+  ``PerVariable(..., default="drop")`` drops unmapped variables.
+
 ## Deferred (documented, not built)
 
 - pymc-marketing facade over the PR-2831 `VariableScaling` contract

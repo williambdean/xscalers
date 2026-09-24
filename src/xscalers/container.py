@@ -54,7 +54,7 @@ def reassemble(X: Any, out: Mapping[str, xr.DataArray]) -> Any:
         return only
     if isinstance(X, xr.Dataset):
         return xr.Dataset(
-            {str(var): out.get(str(var), original) for var, original in X.data_vars.items()}
+            {str(var): out[str(var)] for var in X.data_vars if str(var) in out}
         )
     if isinstance(X, xr.DataTree):
         groups = _groups_from_keys(X, out)

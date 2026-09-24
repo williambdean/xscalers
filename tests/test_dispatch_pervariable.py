@@ -73,3 +73,30 @@ class TestDataTreeDispatch:
         media = split_tree.children["media"].dataset["media"]
         expected = media / media.mean("date")
         assert np.allclose(out.children["media"].dataset["media"].values, expected.values)
+
+
+class TestDropDefault:
+    def test_drop_removes_unmapped_variables(self, mixed_grain_ds):
+        dispatch = PerVariable(
+            {"media_national": scalers.MeanScaler(dims=("date",))}, default="drop"
+        )
+        state = dispatch.fit(mixed_grain_ds)
+        out = dispatch.transform(mixed_grain_ds, state)
+        assert set(out.data_vars) == {"media_national"}
+        back = dispatch.inverse_transform(out, state)
+        assert set(back.data_vars) == {"media_national"}
+        assert np.allclose(
+            back["media_national"].values, mixed_grain_ds["media_national"].values
+        )
+
+    def test_drop_plus_passthrough_explicit(self, mixed_grain_ds):
+        dispatch = PerVariable(
+            {
+                "media_national": scalers.MeanScaler(dims=("date",)),
+                "controls_nat": "passthrough",
+            },
+            default="drop",
+        )
+        state = dispatch.fit(mixed_grain_ds)
+        out = dispatch.transform(mixed_grain_ds, state)
+        assert set(out.data_vars) == {"media_national", "controls_nat"}

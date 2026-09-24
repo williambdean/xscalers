@@ -9,7 +9,7 @@ import xarray as xr
 from xscalers import scalers
 from xscalers.core import from_spec
 from xscalers.dispatch import PerVariable
-from xscalers.pipeline import Pipeline
+from xscalers.pipeline import Pipeline, make_pipeline
 
 
 def _make():
@@ -102,3 +102,80 @@ class NonAffineStep:
 
     def inverse_transform(self, X, state):
         return X
+
+
+class TestBoundStepAccess:
+    """pipe["name"] = the fitted step: transformer + its state slice, usable on new data."""
+
+    def test_step_access_returns_bound_view(self, national_ds):
+        pipe = _make()
+        pipe.fit(national_ds)
+        step = pipe["target"]
+        assert step.transformer is pipe.named_steps()["target"]
+        assert step.state is not None
+        assert set(step.state) == {"target"}
+
+    def test_bound_step_transforms_new_data(self, national_ds):
+        """The 'access transformations after the fact' path: apply one fitted step alone."""
+        pipe = _make()
+        pipe.fit(national_ds)
+        conj = xr.Dataset({"target": xr.DataArray(np.ones(30) * 100.0, dims=("date",))})
+        out = pipe["target"].transform(conj)
+        scaled = conj["target"] - national_ds["target"].mean("date")
+        scaled = scaled / national_ds["target"].std("date", ddof=0)
+        assert np.allclose(out["target"].values, scaled.values)
+
+    def test_bound_step_inverse(self, national_ds):
+        pipe = _make()
+        pipe.fit(national_ds)
+        y = xr.Dataset({"target": xr.DataArray(np.full(30, 0.25), dims=("date",))})
+        back = pipe["target"].inverse_transform(y)
+        mean = national_ds["target"].mean("date").item()
+        std = national_ds["target"].std("date", ddof=0).item()
+        assert np.allclose(back["target"].values, y["target"].values * std + mean)
+
+    def test_unfit_pipeline_raises(self, national_ds):
+        pipe = _make()
+        with pytest.raises(RuntimeError):
+            pipe["target"]
+
+    def test_unknown_step_raises(self, national_ds):
+        pipe = _make()
+        pipe.fit(national_ds)
+        with pytest.raises(KeyError):
+            pipe["nope"]
+
+
+class TestPassthroughSteps:
+    def test_string_passthrough_step_is_a_no_op(self, national_ds):
+        pipeline = Pipeline(
+            [
+                ("identity", "passthrough"),
+                ("scale", _make()),
+            ]
+        )
+        state = pipeline.fit(national_ds)
+        # the passthrough step contributes no state beyond an empty Dataset
+        assert len(state["identity"].data_vars) == 0
+        # downstream steps still chain: media scaled by the second step
+        media = national_ds["media"]
+        assert np.allclose(
+            pipeline.transform(national_ds, state)["media"].values,
+            (media / media.mean("date")).values,
+        )
+        back = pipeline.inverse_transform(pipeline.transform(national_ds, state), state)
+        for var in national_ds.data_vars:
+            assert np.allclose(back[var].values, national_ds[var].values)
+
+
+class TestMakePipeline:
+    def test_auto_names_from_class(self, national_ds):
+        z = scalers.ZScore(dims=("date",))
+        m = scalers.MeanScaler(dims=("date",))
+        pipe = make_pipeline(z, m)
+        assert [name for name, _ in pipe.steps] == ["zscore", "meanscaler"]
+
+    def test_repeated_transformers_get_suffixed_names(self):
+        z1, z2 = scalers.ZScore(), scalers.ZScore()
+        pipe = make_pipeline(z1, z2)
+        assert [name for name, _ in pipe.steps] == ["zscore", "zscore-1"]
