@@ -8,3 +8,7 @@ dist/
 uv.lock
 dogfood_run/
 notebooks/__marimo__/
+*.nc
+*.zarr
+dogfood_run/
+dogfood_terms/
