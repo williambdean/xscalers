@@ -44,6 +44,7 @@ dev = [
     "h5netcdf>=1.8.1",
     "netcdf4>=1.7.4",
     "scikit-learn>=1.9.1",
+    "pandas-stubs>=3.0.5.260914",
 ]
 
 [tool.coverage.run]
@@ -60,6 +61,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 extend-select = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+# the README-exec test is the point of this file: it runs the documented
+# examples exactly as a user would paste them
+"tests/test_datasets.py" = ["S102"]
 
 [tool.mypy]
 python_version = "3.12"

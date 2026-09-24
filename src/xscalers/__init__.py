@@ -21,6 +21,7 @@ from .core import (
     as_state,
     register,
 )
+from .datasets import load_channel_tree, load_mixed_grain, load_national
 from .dispatch import PerVariable
 from .pipeline import BoundStep, Pipeline, make_pipeline
 from .scalers import FixedScaler, MeanScaler, ZScore
@@ -31,13 +32,12 @@ __all__ = [
     "REGISTRY",
     "BaseAffineTransformer",
     "BaseTransformer",
+    "BoundStep",
     "FixedScaler",
     "MeanScaler",
     "NonInvertibleError",
     "PerVariable",
-    "BoundStep",
     "Pipeline",
-    "make_pipeline",
     "Selector",
     "Splitter",
     "ZScore",
@@ -47,6 +47,10 @@ __all__ = [
     "from_spec",
     "lift_state",
     "lift_state_if_symbolic",
+    "load_channel_tree",
+    "load_mixed_grain",
+    "load_national",
+    "make_pipeline",
     "reassemble",
     "register",
     "state_tree",
