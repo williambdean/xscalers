@@ -8,12 +8,13 @@ import xarray as xr
 
 from xscalers.core import (
     BaseTransformer,
-    NonInvertibleError,
     affine_pair,
     from_spec,
+    register,
 )
 
 
+@register
 class SetScale(BaseTransformer):
     """Minimal concrete transformer for contract tests: divide by a constant."""
 
@@ -29,6 +30,9 @@ class SetScale(BaseTransformer):
             {"center": 0.0, "scale": self.scale},
             attrs={"kind": "set_scale", "dims": (), "scaled_from": getattr(X, "name", None)},
         )
+
+    def to_spec_kwargs(self):
+        return {"scale": self.scale}
 
     def transform(self, X, state):
         return X / state["scale"]
@@ -60,7 +64,7 @@ class TestStateConventions:
 
 
 class TestAffineView:
-    def test_affine_pair_roundtrip(self, national_ds, rng):
+    def test_affine_pair_roundtrip(self, national_ds):
         da = national_ds["media"]
         state = SetScale(scale=2.0).fit(da)
         scaled = da / 2.0
@@ -72,27 +76,36 @@ class TestAffineView:
         class Drop(BaseTransformer):
             dims = None
 
-            def fit(self, X):
+            def compute(self, X):
                 return xr.Dataset()
 
-            def transform(self, X, state):
+            def _transform(self, X, state):
                 return X
 
-            def inverse_transform(self, X, state):
+            def _inverse_transform(self, X, state):
                 raise NotImplementedError
 
-        with pytest.raises(NonInvertibleError):
+        step = Drop()
+        state = step.fit(national_ds["target"])
+        assert len(state.data_vars) == 0
+        with pytest.raises(NotImplementedError):
+            step.inverse_transform(national_ds["target"], state)
+
+    def test_unknown_spec_kind_raises_value_error(self):
+        with pytest.raises(ValueError):
             from_spec({"kind": "Nope", "kwargs": {}})
 
 
 class TestSpecRoundtrip:
-    def test_from_spec_rebuilds(self, national_ds):
+    def test_from_spec_rebuilds(self, national_ds, tmp_path):
         original = SetScale(scale=3.0)
         spec = original.to_spec()
         rebuilt = from_spec(spec)
         assert isinstance(rebuilt, SetScale)
         assert rebuilt.scale == 3.0
 
-        states = original.fit(national_ds["target"]).to_netcdf("/tmp/x.nc")
-        state = xr.open_dataset("/tmp/x.nc")
-        assert np.allclose(original.transform(national_ds["target"], state).values, national_ds["target"].values / 3.0)
+        path = tmp_path / "state.nc"
+        original.fit(national_ds["target"]).to_netcdf(path)
+        state = xr.open_dataset(path)
+        out = original.transform(national_ds["target"], state)
+        assert np.allclose(out.values, national_ds["target"].values / 3.0)

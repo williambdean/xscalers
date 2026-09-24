@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import xarray as xr
 
 from xscalers.scalers import FixedScaler, MeanScaler, ZScore
 
@@ -78,7 +77,12 @@ class TestZScore:
         sk = StandardScaler().fit_transform(da.values)
         state = ZScore(dims=("date",)).fit(da)
         ours = ZScore(dims=("date",)).transform(da, state)
-        assert np.allclose(ours.values, np.nan_to_num(sk, nan=np.nan))
+        both_nan = np.isnan(ours.values) & np.isnan(np.nan_to_num(sk, nan=np.nan, posinf=np.inf))
+        # same NaN pattern as sklearn, same values where finite
+        assert np.array_equal(np.isnan(ours.values), np.isnan(sk))
+        assert not both_nan.all()
+        finite = ~np.isnan(sk)
+        assert np.allclose(ours.values[finite], sk[finite])
 
     def test_inverse_roundtrip(self, national_ds):
         da = national_ds["target"]
@@ -109,6 +113,7 @@ class TestMutation:
         da = national_ds["target"]
         state = MeanScaler(dims=("date",)).fit(da)
         base = MeanScaler(dims=("date",)).transform(da, state)
+        assert np.allclose(base.values, da.values / da.mean("date").values)
         state["scale"] = state["scale"] * 2
         after = MeanScaler(dims=("date",)).transform(da, state)
         assert np.allclose(after.values, (da.values / da.mean("date").values) / 2)

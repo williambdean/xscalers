@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 import xarray as xr
 
+from xscalers import scalers
 from xscalers.core import from_spec, to_spec
 from xscalers.dispatch import PerVariable
 from xscalers.pipeline import Pipeline
-from xscalers import scalers
 
 
 class TestScalerSpecs:
@@ -46,9 +45,11 @@ class TestPipelineSpec:
         )
         spec = pipe.to_spec()
         rebuilt = from_spec(spec)
+        fitted = rebuilt.fit(national_ds)
+        original_state = pipe.fit(national_ds)
         assert np.allclose(
-            rebuilt.fit(national_ds)["scale"]["scale"].values,
-            pipe.fit(national_ds)["scale"]["scale"].values,
+            fitted["scale"]["target"]["scale"].values,
+            original_state["scale"]["target"]["scale"].values,
         )
 
 
