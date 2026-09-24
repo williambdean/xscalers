@@ -1,0 +1,42 @@
+{
+  "kind": "Pipeline",
+  "kwargs": {
+    "steps": [
+      [
+        "scale",
+        {
+          "kind": "PerVariable",
+          "kwargs": {
+            "mapping": {
+              "target": {
+                "kind": "ZScore",
+                "kwargs": {
+                  "dims": [
+                    "date"
+                  ]
+                }
+              },
+              "media": {
+                "kind": "MeanScaler",
+                "kwargs": {
+                  "dims": [
+                    "date"
+                  ]
+                }
+              },
+              "controls": {
+                "kind": "ZScore",
+                "kwargs": {
+                  "dims": [
+                    "date"
+                  ]
+                }
+              }
+            },
+            "default": "passthrough"
+          }
+        }
+      ]
+    ]
+  }
+}

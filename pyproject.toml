@@ -46,6 +46,9 @@ dev = [
     "scikit-learn>=1.9.1",
     "pandas-stubs>=3.0.5.260914",
     "zarr>=3.4.0",
+    "pymc>=6.3.2",
+    "marimo>=0.25.0",
+    "pymc-marketing",
 ]
 
 [tool.coverage.run]
@@ -95,3 +98,6 @@ filterwarnings = [
     # informational — import succeeds and IO works
     "ignore:numpy.ndarray size changed, may indicate binary incompatibility:RuntimeWarning",
 ]
+
+[tool.uv.sources]
+pymc-marketing = { git = "https://github.com/pymc-labs/pymc-marketing", rev = "feat/terms-serialization" }

@@ -177,17 +177,25 @@ scaler = MeanScaler(dims=("date",))
 state = scaler.fit(national["target"])
 y = scaler.transform(national["target"], state)   # scaled input into the model
 
+import xarray as xr
 with pm.Model() as model:
     beta = pm.Normal("beta", 0, 1)
     sigma = pm.HalfNormal("sigma", 1)
-    pm.Normal("obs", beta * y.mean(), sigma, observed=y)
+    # numpy views into the scaled dataset operate the same as scaled arrays
+    pm.Normal("obs", beta * float(y.mean()), sigma, observed=np.asarray(y))
     idata = pm.sample_prior_predictive(draws=10, random_seed=0)
 
-az.to_netcdf(idata, "posterior.nc")               # model results...
+import numpy as np
+idata.to_netcdf("posterior.nc")                   # model results...
 state.to_netcdf("scaler_state.nc")                # ...and its scaling, side by side
-idata_back = az.from_netcdf("posterior.nc")
+idata_back = xr.open_datatree("posterior.nc")     # DataTree in, DataTree out
 state_back = xr.open_dataset("scaler_state.nc")
-contributions_original_scale = idata_back["prior"]["beta"].mean() * state["scale"] + state["center"]
+
+# real-terms conversion needs BOTH parts of the affine pair (center, scale)
+posterior_beta = float(idata_back["prior"]["beta"].mean())
+contribution_scaled = posterior_beta * float(np.asarray(y).mean())
+contribution_real = contribution_scaled * float(state_back["scale"]) + float(state_back["center"])
+contributions_original_scale = contribution_real
 import os
 for name in ("posterior.nc", "scaler_state.nc"):
     os.remove(name)

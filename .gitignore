@@ -6,3 +6,5 @@ __pycache__/
 .mypy_cache/
 dist/
 uv.lock
+dogfood_run/
+notebooks/__marimo__/

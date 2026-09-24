@@ -1,0 +1,34 @@
+{
+  "__type__": "pymc_marketing.terms.Sum",
+  "terms": [
+    {
+      "__type__": "pymc_marketing.terms.Parameter",
+      "name": "intercept",
+      "prior": {
+        "dist": "Normal",
+        "kwargs": {
+          "mu": 0,
+          "sigma": 0.2
+        }
+      }
+    },
+    {
+      "__type__": "pymc_marketing.terms.Dot",
+      "var_name": "media",
+      "prior": {
+        "dist": "Normal",
+        "dims": [
+          "channel"
+        ]
+      },
+      "name": "media_coef"
+    },
+    {
+      "__type__": "pymc_marketing.terms.Parameter",
+      "name": "control_coef",
+      "prior": {
+        "dist": "Normal"
+      }
+    }
+  ]
+}
