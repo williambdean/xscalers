@@ -1,0 +1,79 @@
+[project]
+name = "xscalers"
+version = "0.1.0"
+description = "sklearn-shaped, dim-aware scaling transformers for xarray and pytensor.xtensor"
+readme = "README.md"
+authors = [
+    { name = "Will Dean", email = "wd60622@gmail.com" }
+]
+license = "MIT"
+keywords = [
+    "xarray",
+    "scaling",
+    "preprocessing",
+    "pymc",
+    "pytensor",
+    "marketing-mix-models",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
+requires-python = ">=3.12"
+dependencies = ["numpy>=2.0", "xarray>=2024.10.0"]
+
+[project.optional-dependencies]
+pytensor = ["pytensor>=3.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+    "ruff>=0.9",
+    "mypy>=1.14",
+    # pytensor lives in dev too so the flagship cross-backend tests run locally;
+    # runtime use stays optional via the [pytensor] extra
+    "pytensor>=3.0",
+    "h5netcdf>=1.8.1",
+    "netcdf4>=1.7.4",
+]
+
+[tool.coverage.run]
+source = ["xscalers"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = "pytensor.*"
+ignore_missing_imports = true
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
