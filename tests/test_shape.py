@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import xarray as xr
 
 from xscalers import scalers
+from xscalers.core import NonInvertibleError
 from xscalers.dispatch import PerVariable
 from xscalers.pipeline import Pipeline
-from xscalers.core import NonInvertibleError
 from xscalers.shape import Selector, Splitter
 
 DIGITAL = ["search", "social", "fb"]
@@ -47,7 +46,7 @@ class TestSplitter:
         assert state.attrs["split_dim"] == "channel"
         assert set(state.attrs["pieces"]) == {"digital", "tv"}
         # full original coordinate saved as a data var (netCDF-safe), not attrs
-        assert list(state["channel_labels"].values) == ["search", "social", "fb", "tv", "stream"]
+        assert list(state["labels_channel"].values) == ["search", "social", "fb", "tv", "stream"]
 
     def test_transform_replaces_source_with_piece_nodes(self, split_tree):
         tree = _splitter().transform(split_tree, _splitter().fit(split_tree))

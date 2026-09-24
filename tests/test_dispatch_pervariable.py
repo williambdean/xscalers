@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
-import xarray as xr
 
 from xscalers import scalers
 from xscalers.dispatch import PerVariable

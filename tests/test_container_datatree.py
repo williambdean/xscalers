@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 import xarray as xr
 
 from xscalers import scalers
-from xscalers.container import flatten, state_tree, unflatten
+from xscalers.container import flatten, reassemble, state_tree
 
 
 class TestFlatten:
@@ -19,20 +18,23 @@ class TestFlatten:
         items = flatten(national_ds["target"])
         assert set(items) == {"target"}
 
-    def test_datatree_flattens_node_paths(self, split_tree):
+    def test_datatree_lowercase_source_flattens_node_paths(self, split_tree):
         items = flatten(split_tree)
-        assert set(items) == {"media/media", "controls/controls"}
+        # single-var nodes flatten to their node path; the var name joins only
+        # when a node holds several variables (see container docstring)
+        assert set(items) == {"media", "controls"}
 
 
 class TestUnflatten:
     def test_dataset_roundtrip(self, mixed_grain_ds):
-        rebuilt = unflatten("Dataset", flatten(mixed_grain_ds))
-        for var in mixed_grain_ds.data_vars:
-            assert rebuilt[var].ndim == mixed_grain_ds[var].ndim
+        for name, da in reassemble(mixed_grain_ds, flatten(mixed_grain_ds)).data_vars.items():
+            original = mixed_grain_ds[name]
+            assert da.data.ndim == original.data.ndim
+            assert da.data.size == original.data.size
 
     def test_datatree_roundtrip(self, split_tree):
-        rebuilt = unflatten("DataTree", flatten(split_tree))
-        assert list(rebuilt.children) == ["controls", "media"]
+        rebuilt = reassemble(split_tree, flatten(split_tree))
+        assert set(rebuilt.children) == {"controls", "media"}
         assert np.allclose(
             rebuilt.children["media"].dataset["media"].values,
             split_tree.children["media"].dataset["media"].values,

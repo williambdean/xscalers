@@ -26,8 +26,9 @@ class TestPipeline:
         pipe = _make()
         state = pipe.fit(national_ds)
         assert set(state) == {"target", "media"}
+        # composite steps contribute one level of nesting: step → variable → state
         assert np.isclose(
-            float(state["target"]["scale"].item()),
+            float(state["target"]["target"]["scale"].item()),
             national_ds["target"].std("date", ddof=0).item(),
         )
 
@@ -73,14 +74,15 @@ class TestAffine:
         assert np.allclose(ours.values, sk)
 
     def test_composed_affine_unscales_contributions(self, national_ds):
+        """inverse_transform through the pipeline ≡ applying the composed affine pair."""
         pipe = _make()
         state = pipe.fit(national_ds)
         view = pipe.affine(state)
 
         contrib = xr.DataArray(np.full(30, 0.25), dims=("date",))
-        restored = contrib * view["target"]["scale"] + view["target"]["center"]
-        direct = pipe.inverse_transform(restored, state)
-        assert np.allclose(restored.values, direct["target"].values)
+        direct = pipe.inverse_transform(xr.Dataset({"target": contrib}), state)
+        expected = contrib * view["target"]["scale"] + view["target"]["center"]
+        assert np.allclose(direct["target"].values, expected.values)
 
     def test_affine_raises_for_non_affine_steps(self, national_ds):
         pipeline = Pipeline([("shape", NonAffineStep()), ("scale", _make())])
