@@ -64,41 +64,143 @@ scaled = dispatch.transform(mixed, state)  # each var scaled by its own recipe
 ## Splitting one variable into differently-treated pieces
 
 Different treatment *within* one media variable (digital vs TV) works by
-splitting into pieces, scaling each, then recombining:
+splitting into pieces, scaling each, then recombining. Real MMM inputs are a
+plain Dataset of variables, so pieces become *sibling variables*
+(`media_digital`, `media_linear`), each keeping its slice of the coordinate
+under a piece-specific dim name; `inverse_transform` recombines and restores
+the original coordinate order:
 
 ```python
 from xscalers import FixedScaler, MeanScaler, Pipeline, Splitter
 from xscalers.dispatch import PerVariable
-from xscalers.datasets import load_channel_tree
+from xscalers.datasets import load_media_channels
 
-tree = load_channel_tree()
+ds = load_media_channels()
 
 pipe = Pipeline(
     [
-        ("split", Splitter("media", {"digital": {"channel": ["search", "social", "fb"]}})),
+        (
+            "split",
+            Splitter(
+                "media",
+                {
+                    "digital": {"channel": ["search", "social", "fb"]},
+                    "linear": {"channel": ["tv", "stream"]},
+                },
+            ),
+        ),
         (
             "scale",
             PerVariable(
-                {"digital": MeanScaler(dims=("date",)), "controls": FixedScaler(scale=1.0)}
+                {
+                    "media_digital": MeanScaler(dims=("date",)),
+                    "media_linear": FixedScaler(scale=1_000),
+                },
             ),
         ),
     ]
 )
-state = pipe.fit(tree)
-scaled_tree = pipe.transform(tree, state)     # pieces as child nodes media/digital
+state = pipe.fit(ds)
+scaled = pipe.transform(ds, state)
 
-back = pipe.inverse_transform(scaled_tree, state)   # pieces recombine; coords restored
-media = back.children["media"].dataset["media"]
+back = pipe.inverse_transform(scaled, state)   # pieces recombine; coords restored
+import numpy as np
+np.testing.assert_allclose(back["media"], ds["media"])
+```
+
+## Saving the fitted state
+
+State is **data** — saving it is native xarray IO, in any of the three shapes
+you'll meet in practice:
+
+**1. A standalone one-file artifact** — `to_netcdf`, next to your recipe:
+
+```python
+import os
+import xarray as xr
+import numpy as np
+from xscalers import MeanScaler
+from xscalers.datasets import load_national
+
+national = load_national()
+scaler = MeanScaler(dims=("date",))
+state = scaler.fit(national["media"])
+
+state.to_netcdf("media_state.nc")                 # state is a Dataset — native IO
+reloaded = xr.open_dataset("media_state.nc")      # ...read back natively
+scaled = scaler.transform(national["media"], reloaded)
+back = scaler.inverse_transform(scaled, reloaded)
+np.testing.assert_allclose(back, national["media"])
+os.remove("media_state.nc")                       # tidy up after this example
+```
+
+**2. Alongside your (large) zarr inputs** — append the state tree as groups
+of the existing store; `append_state` exists only because
+`DataTree.to_zarr(group=...)` is not implemented upstream — reading back is
+native:
+
+```python
+from pathlib import Path
+from xscalers import append_state
+from xscalers.container import state_tree
+
+store = Path("mmm.zarr")                     # your existing input store
+mixed = load_mixed_grain()                   # pretend it already lives there
+mixed.to_zarr(store)                         # ... here we create it first
+
+dispatch = PerVariable({"media_national": MeanScaler(dims=("date",))}, default="drop")
+state = dispatch.fit(mixed)
+append_state(state_tree({"scale": state}), store, group="scalers")
+
+import xarray as xr
+reloaded_tree = xr.open_datatree(store, group="scalers")
+reloaded_state = {
+    name: node.dataset for name, node in reloaded_tree.children["scale"].children.items()
+}
+scaled_again = dispatch.transform(mixed, reloaded_state)
+import shutil; shutil.rmtree(store)          # tidy up after this example
+```
+
+**3. Next to a pymc model** — the state and the `InferenceData` are separate
+artifacts sharing a directory; recipe (JSON via `to_spec`) is versioned
+config, state is data, never the two mixed:
+
+```python
+# requires-pymc
+import pymc as pm
+import arviz as az
+from xscalers import MeanScaler
+from xscalers.datasets import load_national
+
+national = load_national()
+scaler = MeanScaler(dims=("date",))
+state = scaler.fit(national["target"])
+y = scaler.transform(national["target"], state)   # scaled input into the model
+
+with pm.Model() as model:
+    beta = pm.Normal("beta", 0, 1)
+    sigma = pm.HalfNormal("sigma", 1)
+    pm.Normal("obs", beta * y.mean(), sigma, observed=y)
+    idata = pm.sample_prior_predictive(draws=10, random_seed=0)
+
+az.to_netcdf(idata, "posterior.nc")               # model results...
+state.to_netcdf("scaler_state.nc")                # ...and its scaling, side by side
+idata_back = az.from_netcdf("posterior.nc")
+state_back = xr.open_dataset("scaler_state.nc")
+contributions_original_scale = idata_back["prior"]["beta"].mean() * state["scale"] + state["center"]
+import os
+for name in ("posterior.nc", "scaler_state.nc"):
+    os.remove(name)
 ```
 
 The fitted pipeline serializes as *recipe + artifact*:
 
-From your recipe that same catalog config, the fitted pipeline becomes one artifact:
-
 ```python
-state_tree = pipe.to_state_tree(state)        # xr.DataTree
-state_tree.to_netcdf("fitted_state.nc")       # whole pipeline: one artifact
-import os; os.remove("fitted_state.nc")       # tidy up after this example
+import os
+from xscalers.container import state_tree
+
+state_tree({"scale": state}).to_netcdf("fitted_state.nc")   # whole pipeline: one artifact
+os.remove("fitted_state.nc")                                # tidy up after this example
 ```
 
 ## The flagship flow: fit on xarray, unscale a pymc graph

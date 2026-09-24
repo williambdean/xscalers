@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from xscalers.datasets import load_channel_tree, load_mixed_grain, load_national
+from xscalers.datasets import load_media_channels, load_mixed_grain, load_national
 
 
 class TestLoadNational:
@@ -32,14 +32,15 @@ class TestLoadMixedGrain:
         assert ds.identical(load_mixed_grain())
 
 
-class TestLoadChannelTree:
-    def test_is_a_datatree_with_media_and_controls(self):
-        tree = load_channel_tree()
-        assert isinstance(tree, xr.DataTree)
-        assert list(tree.children) == ["media", "controls"]
+class TestLoadMediaChannels:
+    def test_is_a_single_dataset_with_variables(self):
+        ds = load_media_channels()
+        assert isinstance(ds, xr.Dataset)
+        assert ds["media"].dims == ("date", "channel")
+        assert ds["controls"].dims == ("date",)
 
     def test_deterministic(self):
-        assert load_channel_tree().equals(load_channel_tree())
+        assert load_media_channels().identical(load_media_channels())
 
 
 class TestReadmeExecutes:
@@ -57,8 +58,16 @@ class TestReadmeExecutes:
         assert len(readme_blocks) >= 5
 
     def test_blocks_run(self, readme_blocks, tmp_path, monkeypatch):
+        import importlib.util
+
         # README writes fitted_state.nc to its cwd — keep that in tmp
         monkeypatch.chdir(tmp_path)
         ns: dict = {"__name__": "readme"}
         for block in readme_blocks:
+            first_line = block.strip().splitlines()[0]
+            if first_line.startswith("# requires-"):
+                module = first_line.removeprefix("# requires-").strip()
+                assert module.isidentifier(), f"Bad requires marker: {first_line}"
+                if importlib.util.find_spec(module) is None:
+                    continue  # documented optional dependency; not installed here
             exec(compile(block, "<readme>", "exec"), ns)

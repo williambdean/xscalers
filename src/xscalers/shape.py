@@ -89,15 +89,20 @@ class Splitter:
 
     # -- transformer API ---------------------------------------------------
 
-    def fit(self, X: xr.DataTree) -> xr.Dataset:
-        if not isinstance(X, xr.DataTree):
-            raise TypeError("Splitter works on DataTree inputs")
-        node = _node_of(X, self.source)
-        dim = self.split_dim
-        labels = np.asarray(node[self.source][dim].values)
-        entries: dict[str, Any] = {f"labels_{dim}": xr.DataArray(labels, dims=("labels_index",))}
+    def fit(self, X: xr.DataTree | xr.Dataset) -> xr.Dataset:
+        var = self.source.split("/")[-1]
+        if isinstance(X, xr.Dataset):
+            labels = np.asarray(X[var][self.split_dim].values)
+        elif isinstance(X, xr.DataTree):
+            node = _node_of(X, self.source)
+            labels = np.asarray(node[var][self.split_dim].values)
+        else:
+            raise TypeError("Splitter works on Dataset or DataTree inputs")
+        entries: dict[str, Any] = {
+            f"labels_{self.split_dim}": xr.DataArray(labels, dims=("labels_index",))
+        }
         for piece, sel in self.pieces.items():
-            values = self._jsonable(sel[dim])
+            values = self._jsonable(sel[self.split_dim])
             entries[f"positions_{piece}"] = xr.DataArray(
                 _positions(labels, values), dims=(f"index_{piece}",)
             )
@@ -105,17 +110,33 @@ class Splitter:
             "splitter",
             None,
             scaled_from=self.source,
-            attrs={"source": self.source, "split_dim": dim, "pieces": sorted(self.pieces)},
+            attrs={"source": self.source, "split_dim": self.split_dim, "pieces": sorted(self.pieces)},
             **entries,
         )
 
-    def transform(self, X: xr.DataTree, state: xr.Dataset):
+    def transform(self, X: xr.DataTree | xr.Dataset, state: xr.Dataset):
+        var = self.source.split("/")[-1]
+        if isinstance(X, xr.Dataset):
+            # Dataset inputs: pieces become sibling variables named
+            # ``{source}_{piece}``. A Dataset cannot hold two variables with
+            # disjoint values on the same dim (merge outer-joins), so each
+            # piece's split dim is renamed ``{dim}_{piece}`` — ``inverse_
+            # transform`` renames back and restores the original coordinates.
+            out: dict[str, xr.DataArray] = {}
+            for key, da in flatten(X).items():
+                if key == var:
+                    continue  # replaced by the pieces
+                out[key] = da
+            for piece, sel in self.pieces.items():
+                piece_da = X[var].sel({self.split_dim: list(sel[self.split_dim])})
+                piece_da = piece_da.rename({self.split_dim: f"{self.split_dim}_{piece}"})
+                out[f"{var}_{piece}"] = piece_da.rename(f"{var}_{piece}")
+            return reassemble(X, out)
         if not isinstance(X, xr.DataTree):
-            raise TypeError("Splitter works on DataTree inputs")
+            raise TypeError("Splitter works on Dataset or DataTree inputs")
         node = _node_of(X, self.source)
-        var = var_of(node)
-        full = node[var]
-        out: dict[str, xr.DataArray] = {}
+        full = node.dataset[var]
+        out = {}
         for key, da in flatten(X).items():
             if key == self.source:
                 continue  # replaced by the pieces
@@ -125,12 +146,24 @@ class Splitter:
             out[f"{self.source}/{piece}"] = piece_da.rename(piece)
         return reassemble(X, out)
 
-    def inverse_transform(self, X: xr.DataTree, state: xr.Dataset):
-        if not isinstance(X, xr.DataTree):
-            raise TypeError("Splitter works on DataTree inputs")
+    def inverse_transform(self, X: xr.DataTree | xr.Dataset, state: xr.Dataset):
         dim = self.split_dim
-        parent = _node_of(X, self.source)
         stored = list(state[f"labels_{dim}"].values)
+        if isinstance(X, xr.Dataset):
+            var = self.source.split("/")[-1]
+            pieces = []
+            for piece in state.attrs["pieces"]:
+                piece_var = f"{var}_{piece}"
+                if piece_var not in X.data_vars:
+                    continue
+                pieces.append(X[piece_var].rename({f"{dim}_{piece}": dim}))
+            combined = xr.concat(pieces, dim=dim).reindex({dim: stored})
+            out = {
+                key: da for key, da in flatten(X).items() if not key.startswith(f"{var}_")
+            }
+            out[var] = combined.rename(var)
+            return reassemble(X, out)
+        parent = _node_of(X, self.source)
         pieces_by_order = [
             next(iter(parent.children[piece].dataset.data_vars.values()))
             for piece in state.attrs["pieces"]

@@ -21,8 +21,9 @@ from .core import (
     as_state,
     register,
 )
-from .datasets import load_channel_tree, load_mixed_grain, load_national
+from .datasets import load_media_channels, load_mixed_grain, load_national
 from .dispatch import PerVariable
+from .persistence import append_state
 from .pipeline import BoundStep, Pipeline, make_pipeline
 from .scalers import FixedScaler, MeanScaler, ZScore
 from .serialize import from_spec, to_spec
@@ -42,12 +43,13 @@ __all__ = [
     "Splitter",
     "ZScore",
     "affine_pair",
+    "append_state",
     "as_state",
     "flatten",
     "from_spec",
     "lift_state",
     "lift_state_if_symbolic",
-    "load_channel_tree",
+    "load_media_channels",
     "load_mixed_grain",
     "load_national",
     "make_pipeline",

@@ -8,9 +8,10 @@ produce identical data anywhere. Sizes are deliberately MMM-shaped:
 - :func:`load_mixed_grain` — variables at different grains (national media,
   geo-grain digital media, product-grain controls), the case that motivated
   per-variable dispatch and per-variable dims.
-- :func:`load_channel_tree` — a single ``media (date, channel)`` variable plus
-  controls inside an ``xr.DataTree``, the shape for split-by-channel
-  treatment.
+- :func:`load_media_channels` — a single ``media (date, channel)`` variable plus
+  controls in one Dataset, the raw-input shape for split-by-channel treatment
+  (DataTree inputs remain supported by the library, but real MMM inputs are
+  usually just datasets).
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-__all__ = ["load_channel_tree", "load_mixed_grain", "load_national"]
+__all__ = ["load_media_channels", "load_mixed_grain", "load_national"]
 
 _CHANNELS = ["search", "social", "fb", "tv", "stream"]
 
@@ -72,19 +73,17 @@ def load_mixed_grain() -> xr.Dataset:
     )
 
 
-def load_channel_tree() -> xr.DataTree:
-    """One ``media (date, channel)`` variable needing split treatment, plus controls."""
+def load_media_channels() -> xr.Dataset:
+    """A realistic MMM input: one ``media (date, channel)`` variable needing
+    split treatment, alongside controls — as a single Dataset of variables
+    (the common shape; DataTree inputs remain supported by the library, but
+    real raw inputs are usually just datasets)."""
     rng = np.random.default_rng(7)
     n = 60
-    return xr.DataTree.from_dict(
+    return xr.Dataset(
         {
-            "/media": xr.Dataset(
-                {"media": (("date", "channel"), np.abs(rng.gamma(2.0, 40.0, (n, 5))))},
-                coords={"date": _dates(n), "channel": _CHANNELS},
-            ),
-            "/controls": xr.Dataset(
-                {"controls": (("date",), rng.normal(5, 1, n))},
-                coords={"date": _dates(n)},
-            ),
-        }
+            "media": (("date", "channel"), np.abs(rng.gamma(2.0, 40.0, (n, 5)))),
+            "controls": (("date",), rng.normal(5, 1, n)),
+        },
+        coords={"date": _dates(n), "channel": _CHANNELS},
     )

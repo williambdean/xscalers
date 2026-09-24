@@ -45,6 +45,7 @@ dev = [
     "netcdf4>=1.7.4",
     "scikit-learn>=1.9.1",
     "pandas-stubs>=3.0.5.260914",
+    "zarr>=3.4.0",
 ]
 
 [tool.coverage.run]
@@ -84,3 +85,13 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    # tests must fail on new warnings — ours or any dependency's
+    "error",
+    # zarr's own notice about consolidated metadata not being part of the
+    # zarr v3 spec yet; informational, outside our control
+    "ignore:Consolidated metadata is currently not part in the Zarr format 3 specification:UserWarning",
+    # netCDF4 1.7.4 binary-compat notice under numpy 2.5 (no newer wheel exists);
+    # informational — import succeeds and IO works
+    "ignore:numpy.ndarray size changed, may indicate binary incompatibility:RuntimeWarning",
+]

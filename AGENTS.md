@@ -69,6 +69,24 @@ class BaseTransformer:
    (flatten → compare, pinting `ddof=0` for std), inverse round-trip, affine
    view test. Register the class in the spec registry test if serializable.
 
+## State persistence
+
+- **State is data** — save with native xarray IO: `state.to_netcdf(path)` /
+  `xr.open_dataset(path)`; a whole pipeline is one artifact via `state_tree`
+  (`xr.open_datatree` on the other side).
+- **zarr-alongside**: MMM inputs live in a big zarr store; `append_state(
+  tree, store, group="scalers")` appends the state tree as zarr groups
+  (upstream gap: `DataTree.to_zarr(group=...)` raises NotImplementedError),
+  reading back with `xr.open_datatree(store, group="scalers")`. `mode="a"`
+  means a refit *overwrites* the group; name groups per fit for history.
+- **pymc**: `az.to_netcdf(idata, "posterior.nc")` and
+  `state.to_netcdf("scaler_state.nc")` — state and inference results are
+  separate artifacts sharing a directory. The composed `affine()` view is
+  what converts in-graph contributions to original scale.
+- test philosophy: pytest runs with `filterwarnings = ["error"]` — new
+  warnings fail tests; only two documented upstream notices are ignored
+  (zarr consolidated metadata, netCDF4 numpy-2.5 binary-compat import note).
+
 ## Development
 
 ```bash
