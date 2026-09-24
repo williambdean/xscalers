@@ -43,6 +43,7 @@ dev = [
     "pytensor>=3.0",
     "h5netcdf>=1.8.1",
     "netcdf4>=1.7.4",
+    "scikit-learn>=1.9.1",
 ]
 
 [tool.coverage.run]
