@@ -35,7 +35,11 @@ class TestLiftState:
 
         state = scalers.MeanScaler(dims=("date",)).fit(national_ds["media"])
         lifted = lift_state(state)
-        assert not hasattr(lifted["scale"], "coords")
+        # symbolic entries have no coord carrier: accessing coords raises
+        with pytest.raises(NotImplementedError):
+            lifted["scale"].coords  # noqa: B018 — the raise IS the property under test
+        # and the lifted values still carry the dim names only
+        assert lifted["scale"].dims == ("channel",)
 
 
 class TestSymbolicTransformFromFittedState:
@@ -71,7 +75,7 @@ class TestSymbolicTransformFromFittedState:
         state = scaler.fit(da)
 
         contrib = xr.DataArray(
-            np.ones((2, 3, 4, 5)),  # chain, draw, date, channel
+            np.ones((2, 3, 4, 3)),  # chain, draw, date, channel
             dims=("chain", "draw", "date", "channel"),
         )
         out = scaler.inverse_transform(contrib, state)
@@ -87,5 +91,5 @@ class TestSymbolicTransformFromFittedState:
         f = pytensor.function(
             [sym], scaler.inverse_transform(scaler.transform(sym, state), state).values
         )
-        value = np.arange(24.0).reshape(4, 2, 3)
+        value = np.arange(16.0).reshape(4, 2, 2)
         assert np.allclose(f(value), value)
