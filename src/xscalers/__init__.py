@@ -22,7 +22,7 @@ from .core import (
     register,
 )
 from .dispatch import PerVariable
-from .pipeline import Pipeline
+from .pipeline import BoundStep, Pipeline, make_pipeline
 from .scalers import FixedScaler, MeanScaler, ZScore
 from .serialize import from_spec, to_spec
 from .shape import Selector, Splitter
@@ -35,7 +35,9 @@ __all__ = [
     "MeanScaler",
     "NonInvertibleError",
     "PerVariable",
+    "BoundStep",
     "Pipeline",
+    "make_pipeline",
     "Selector",
     "Splitter",
     "ZScore",
