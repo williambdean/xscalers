@@ -252,7 +252,46 @@ import os
 from xscalers.container import state_tree
 
 state_tree({"scale": state}).to_netcdf("fitted_state.nc")   # whole pipeline: one artifact
-os.remove("fitted_state.nc")                                # tidy up after this example
+```
+
+## Converting back to real units — one verb
+
+Model code never hand-writes `× scale + center`: the affine pair is an
+*internal* detail. `Pipeline.unscale` applies the composed pair per variable
+(eager xarray contributions or symbolic `pytensor.xtensor` in the graph);
+when a pipeline is non-affine (e.g. a log-derived metric), `unscale` walks
+only *that variable's own* steps backwards, stopping at the step that created
+it — so the one call stays honest where hand-written `β·scale` algebra goes
+silently wrong:
+
+```python
+import numpy as np
+from xscalers import Func, FixedScaler, ZScore, load_mixed_grain
+from xscalers.dispatch import PerVariable
+from xscalers.pipeline import Pipeline
+from xscalers.shape import Derive
+import os
+
+pipe = Pipeline(
+    [
+        (
+            "derive",
+            Derive(
+                name="price_rel_comp",
+                numerator=("controls", {"control": "price"}),
+                denominator=("controls", {"control": "comp_price"}),
+                op="ratio",
+            ),
+        ),
+        ("log", Func({"price_rel_comp": "log"})),
+        ("scale", PerVariable({"price_rel_comp": FixedScaler(scale=1.0)})),
+    ]
+)
+state = pipe.fit(load_mixed_grain())
+contrib = xr.DataArray(np.full((104, 4), -0.75), dims=("date", "product"))
+
+y_real = pipe.unscale(contrib, var="price_rel_comp")   # one verb; located = exp(−0.75)
+np.testing.assert_allclose(y_real, np.exp(contrib))
 ```
 
 ## The flagship flow: fit on xarray, unscale a pymc graph
@@ -263,12 +302,16 @@ Requires the optional `pytensor` extra (`pip install "xscalers[pytensor]"`).
 import pytensor.xtensor as ptx
 from xscalers import MeanScaler
 from xscalers.datasets import load_national
+from xscalers.pipeline import Pipeline
+from xscalers.dispatch import PerVariable
 
 scaler = MeanScaler(dims=("date",))
-state = scaler.fit(load_national()["media"])
+data = load_national()
+pipe = Pipeline([("scale", PerVariable({"media": scaler}))])
+state = pipe.fit(data)                                     # fitted pipeline state
 
 contrib = ptx.xtensor("channel_contrib", dims=("date", "channel"))
-spend_real = scaler.inverse_transform(contrib, state)      # symbolic: contrib * mean
+spend_real = pipe.unscale(contrib, var="media", state=state)   # symbolic: contrib * mean
 ```
 
 After sampling, contributions arrive as xarray with `(chain, draw, ...)` —
@@ -294,9 +337,13 @@ back = bound.inverse_transform(scaled_again)     # ...and its inverse
 
 sklearn vocabulary: `fit` / `transform` / `inverse_transform` / `Pipeline`,
 `ColumnTransformer`-style dispatch (that's `PerVariable`), `make_pipeline`,
-`"passthrough"` steps. The deliberate departure: **state is explicit and
-passed around**, not hidden as `scaler.mean_` — that is what lets you edit
-fitted values and reuse them across backends.
+**`make_union`** (many pipelines over the same dataset, merged with a
+collision policy — covariates-only by design), `"passthrough"` steps. The
+deliberate departure: **state is explicit and passed around**, not hidden as
+`scaler.mean_` — that is what lets you edit fitted values and reuse them
+across backends. The counterpart to `transform` for model code is
+**`unscale`**: one verb, correct for affine pipelines and honest for
+non-affine ones.
 
 ## Install
 
