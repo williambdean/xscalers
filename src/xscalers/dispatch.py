@@ -53,6 +53,7 @@ class PerVariable:
 
     def fit(self, X: Any) -> dict[str, Any]:
         items = flatten(X)
+        self._warn_on_missing_keys(items)
         states: dict[str, Any] = {}
         for key, da in items.items():
             scaler = self._scaler_for(key)
@@ -60,6 +61,37 @@ class PerVariable:
                 continue
             states[key] = scaler.compute(da)
         return states
+
+    def _warn_on_missing_keys(self, items: Mapping[str, Any]) -> None:
+        """Explicit mapping entries naming absent variables are config bugs.
+
+        Coordinates (e.g. `date`) are never dispatch keys — a recipe naming
+        one would otherwise pass through silently under passthrough defaults.
+        Suffix matches (split pieces like 'media/digital' ↔ 'digital') are
+        legitimate, so they don't warn.
+        """
+        item_keys = list(items)
+
+        def _matched(key: str) -> bool:
+            return any(k == key or k.endswith(f"/{key}") for k in item_keys)
+
+        missing = [k for k in self.mapping if not _matched(k)]
+        if not missing:
+            return
+        for key in missing:
+            import difflib
+
+            suggestion = difflib.get_close_matches(key, item_keys, n=1)
+            hint = f"; did you mean {suggestion[0]!r}?" if suggestion else ""
+            import warnings
+
+            warnings.warn(
+                f"PerVariable mapping key {key!r} is missing from the input's "
+                f"data variables{hint} (coordinates or DataTree children "
+                "cannot be scaled directly); the variable will pass through unscaled.",
+                UserWarning,
+                stacklevel=3,
+            )
 
     def transform(self, X: Any, state: Mapping[str, Any]) -> Any:
         out: dict[str, Any] = {}

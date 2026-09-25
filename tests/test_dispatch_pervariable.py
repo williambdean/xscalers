@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from xscalers import scalers
 from xscalers.dispatch import PerVariable
@@ -100,3 +101,34 @@ class TestDropDefault:
         state = dispatch.fit(mixed_grain_ds)
         out = dispatch.transform(mixed_grain_ds, state)
         assert set(out.data_vars) == {"media_national", "controls_nat"}
+
+
+class TestMappingValidation:
+    """An explicit mapping entry naming an unknown variable is a config bug — loud, not silent."""
+
+    def test_unknown_mapping_key_warns(self, mixed_grain_ds):
+        """A coordinate name ('date') is not a data variable — must warn, not scale silently."""
+        dispatch = PerVariable({"date": scalers.MeanScaler(dims=("date",))})
+        with pytest.warns(UserWarning, match="missing from the input"):
+            dispatch.fit(mixed_grain_ds)
+
+    def test_unmatched_keys_listed_with_suggestion(self, mixed_grain_ds):
+        """Closest-name hint: typo-like mapping entries are discoverable."""
+        dispatch = PerVariable({"media_natoinal": scalers.MeanScaler(dims=("date",))})
+        with pytest.warns(UserWarning, match="media_natoinal"):
+            dispatch.fit(mixed_grain_ds)
+
+
+class TestUnknownInputVariable:
+    """Transform against data whose variables the fitted recipe never saw."""
+
+    def test_transform_of_unscaled_variable_passthrough_with_state(self, mixed_grain_ds):
+        """Unmapped-but-present variables pass through even when other keys scale."""
+        dispatch = PerVariable({"media_national": scalers.MeanScaler(dims=("date",))})
+        state = dispatch.fit(mixed_grain_ds)
+        out = dispatch.transform(mixed_grain_ds, state)
+        assert np.allclose(out["media_tv"].values, mixed_grain_ds["media_tv"].values)
+        assert np.allclose(
+            out["media_national"].values,
+            mixed_grain_ds["media_national"] / mixed_grain_ds["media_national"].mean("date"),
+        )
