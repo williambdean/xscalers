@@ -8,6 +8,9 @@ dist/
 uv.lock
 dogfood_run/
 notebooks/__marimo__/
+# client-confidential dogfood: kept locally, never tracked
+notebooks/dogfood_regression.py
+notebooks/dogfood_findings.md
 *.nc
 *.zarr
 dogfood_run/
