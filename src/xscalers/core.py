@@ -116,7 +116,7 @@ class BaseTransformer(ABC):
 
     def fit(self, X: Any) -> Any:
         """Fit: DataArrays (and symbolic inputs) directly; containers via dispatch."""
-        from .dispatch import PerVariable
+        from .compose import PerVariable
 
         if self.__scalarish(X):
             return self.compute(X)
@@ -125,7 +125,7 @@ class BaseTransformer(ABC):
     def transform(
         self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
     ) -> Any:
-        from .dispatch import PerVariable
+        from .compose import PerVariable
 
         if self.__scalarish(X):
             return self._transform(X, state)
@@ -134,7 +134,7 @@ class BaseTransformer(ABC):
     def inverse_transform(
         self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
     ) -> Any:
-        from .dispatch import PerVariable
+        from .compose import PerVariable
 
         if self.__scalarish(X):
             return self._inverse_transform(X, state)

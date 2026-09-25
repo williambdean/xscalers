@@ -7,7 +7,7 @@ import pytest
 import xarray as xr
 
 from xscalers import Func, MeanScaler, ZScore
-from xscalers.dispatch import PerVariable
+from xscalers.compose import PerVariable
 from xscalers.pipeline import Pipeline
 
 
@@ -60,21 +60,21 @@ class TestUnscaleAffine:
 class TestUnscaleNonAffineFallback:
     def test_log_chain_delegates_to_inverse_transform(self, mixed_grain_ds):
         from xscalers import FixedScaler
-        from xscalers.shape import Derive
+        from xscalers.preprocessing import Derive
 
         pipe = Pipeline(
             [
                 (
                     "derive",
                     Derive(
-                        name="name_rel_price",
-                        numerator=("controls", {"control": "price"}),
-                        denominator=("controls", {"control": "comp_price"}),
+                        name="level_rel_reference",
+                        numerator=("controls", {"control": "level"}),
+                        denominator=("controls", {"control": "reference"}),
                         op="ratio",
                     ),
                 ),
-                ("log", Func({"name_rel_price": "log"})),
-                ("scale", PerVariable({"name_rel_price": FixedScaler(scale=1.0)})),
+                ("log", Func({"level_rel_reference": "log"})),
+                ("scale", PerVariable({"level_rel_reference": FixedScaler(scale=1.0)})),
             ]
         )
         pipe.fit(mixed_grain_ds)
@@ -84,7 +84,7 @@ class TestUnscaleNonAffineFallback:
         # unscale's fallback walks only THIS variable's own steps backwards —
         # un-scale (fixed, scale=1) then un-log — stopping before Derive, so
         # the result is the derived variable's real-space value: exp(−1)
-        out = pipe.unscale(contrib, var="name_rel_price")
+        out = pipe.unscale(contrib, var="level_rel_reference")
         assert np.allclose(out.values, np.exp(contrib.values))
 
 

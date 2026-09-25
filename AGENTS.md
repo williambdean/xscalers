@@ -59,9 +59,22 @@ class BaseTransformer:
 - Keys: canonical learned-state names are `center` and `scale` (z-score's
   `mean`/`std` map onto this affine pair).
 
+## Module layout (mirrors sklearn)
+
+| xscalers | sklearn | holds |
+| --- | --- | --- |
+| `preprocessing` | `preprocessing` | `ZScore`, `MeanScaler`, `FixedScaler`, `Func`, `Derive`, `Splitter`, `Selector` |
+| `compose` | `compose` | `PerVariable` (the ColumnTransformer analog) |
+| `pipeline` | `pipeline` | `Pipeline`, `Union`, `make_pipeline`, `make_union` |
+| `datasets` | `datasets` | `load_national`, `load_mixed_grain`, `load_media_channels` |
+| `core`, `container`, `binding`, `persistence`, `serialize` | `base` + internals | the contract, DataTree/flatten plumbing, xtensor lifting, state IO, specs |
+
+Public names are re-exported from the package root, but README/docs examples
+import from the mirrored module the way sklearn users write sklearn.
+
 ## Adding a scaler
 
-1. Subclass `BaseAffineTransformer` in `src/xscalers/scalers.py`; implement
+1. Subclass `BaseAffineTransformer` in `src/xscalers/preprocessing.py`; implement
    `compute(X) -> xr.Dataset` producing `center` / `scale` entries over the
    kept dims (reduce over `self._reduce_dims(X)`).
 2. Register with `@register` so `from_spec` can rebuild it.

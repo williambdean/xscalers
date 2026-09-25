@@ -7,10 +7,10 @@ import pytest
 import xarray as xr
 
 from xscalers import Func, MeanScaler, ZScore
+from xscalers.compose import PerVariable
 from xscalers.container import state_from_tree, state_tree
-from xscalers.dispatch import PerVariable
 from xscalers.pipeline import Pipeline, make_pipeline, make_union
-from xscalers.shape import Derive
+from xscalers.preprocessing import Derive
 
 DIGITAL = ["search", "social", "fb"]
 LINEAR = ["tv", "stream"]
@@ -19,26 +19,26 @@ LINEAR = ["tv", "stream"]
 def _branch_digital():
     return make_pipeline(
         Derive(
-            name="price_rel_comp",
-            numerator=("controls", {"control": "price"}),
-            denominator=("controls", {"control": "comp_price"}),
+            name="level_vs_reference",
+            numerator=("controls", {"control": "level"}),
+            denominator=("controls", {"control": "reference"}),
             op="ratio",
         ),
-        Func({"price_rel_comp": "log"}),
-        PerVariable({"price_rel_comp": ZScore(dims=("date",))}),
+        Func({"level_vs_reference": "log"}),
+        PerVariable({"level_vs_reference": ZScore(dims=("date",))}),
     )
 
 
-def _branch_inflation():
+def _branch_seasonality():
     return make_pipeline(
         Derive(
-            name="price_rel_infl",
-            numerator=("controls", {"control": "price"}),
-            denominator=("controls", {"control": "inflation"}),
+            name="level_vs_seasonality",
+            numerator=("controls", {"control": "level"}),
+            denominator=("controls", {"control": "seasonality"}),
             op="ratio",
         ),
-        Func({"price_rel_infl": "log"}),
-        PerVariable({"price_rel_infl": ZScore(dims=("date",))}),
+        Func({"level_vs_seasonality": "log"}),
+        PerVariable({"level_vs_seasonality": ZScore(dims=("date",))}),
     )
 
 
@@ -49,28 +49,28 @@ def _linear_reference():
             (
                 "rel_comp",
                 Derive(
-                    name="price_rel_comp",
-                    numerator=("controls", {"control": "price"}),
-                    denominator=("controls", {"control": "comp_price"}),
+                    name="level_vs_reference",
+                    numerator=("controls", {"control": "level"}),
+                    denominator=("controls", {"control": "reference"}),
                     op="ratio",
                 ),
             ),
             (
                 "rel_infl",
                 Derive(
-                    name="price_rel_infl",
-                    numerator=("controls", {"control": "price"}),
-                    denominator=("controls", {"control": "inflation"}),
+                    name="level_vs_seasonality",
+                    numerator=("controls", {"control": "level"}),
+                    denominator=("controls", {"control": "seasonality"}),
                     op="ratio",
                 ),
             ),
-            ("log", Func({"price_rel_comp": "log", "price_rel_infl": "log"})),
+            ("log", Func({"level_vs_reference": "log", "level_vs_seasonality": "log"})),
             (
                 "scale",
                 PerVariable(
                     {
-                        "price_rel_comp": ZScore(dims=("date",)),
-                        "price_rel_infl": ZScore(dims=("date",)),
+                        "level_vs_reference": ZScore(dims=("date",)),
+                        "level_vs_seasonality": ZScore(dims=("date",)),
                     }
                 ),
             ),
@@ -81,7 +81,7 @@ def _linear_reference():
 class TestMerge:
     def test_union_parity_with_linear_pipeline(self, mixed_grain_ds):
         """The union form and the linear chain produce identical scaled variables."""
-        union = make_union(_branch_digital(), _branch_inflation())
+        union = make_union(_branch_digital(), _branch_seasonality())
         state = union.fit(mixed_grain_ds)
         out_union = union.transform(mixed_grain_ds, state)
 
@@ -89,17 +89,17 @@ class TestMerge:
         linear_state = pipe.fit(mixed_grain_ds)
         out_linear = pipe.transform(mixed_grain_ds, linear_state)
 
-        for var in ("price_rel_comp", "price_rel_infl"):
+        for var in ("level_vs_reference", "level_vs_seasonality"):
             assert np.allclose(out_union[var].values, out_linear[var].values)
         # passthrough inputs survive
         assert np.allclose(out_union["media_national"].values, mixed_grain_ds["media_national"].values)
 
     def test_derived_vars_present_and_inputs_unscaled(self, mixed_grain_ds):
-        union = make_union(_branch_digital(), _branch_inflation())
+        union = make_union(_branch_digital(), _branch_seasonality())
         state = union.fit(mixed_grain_ds)
         out = union.transform(mixed_grain_ds, state)
-        assert "price_rel_comp" in out.data_vars
-        assert "price_rel_infl" in out.data_vars
+        assert "level_vs_reference" in out.data_vars
+        assert "level_vs_seasonality" in out.data_vars
         # media_tv scaled? both branches pass it through untouched (no scaling branch owns it)
         assert np.allclose(out["media_tv"].values, mixed_grain_ds["media_tv"].values)
 
@@ -129,18 +129,18 @@ class TestCollisions:
 
 class TestInverse:
     def test_union_inverse_recovers_inputs(self, mixed_grain_ds):
-        union = make_union(_branch_digital(), _branch_inflation())
+        union = make_union(_branch_digital(), _branch_seasonality())
         state = union.fit(mixed_grain_ds)
         back = union.inverse_transform(union.transform(mixed_grain_ds, state), state)
         for var in mixed_grain_ds.data_vars:
             assert np.allclose(back[var].values, mixed_grain_ds[var].values)
-        for name in ("price_rel_comp", "price_rel_infl"):
+        for name in ("level_vs_reference", "level_vs_seasonality"):
             assert name not in back.data_vars
 
 
 class TestAffine:
     def test_affine_refusal_names_the_union(self, mixed_grain_ds):
-        union = make_union(_branch_digital(), _branch_inflation())
+        union = make_union(_branch_digital(), _branch_seasonality())
         pipe = Pipeline([("union", union), ("scale", PerVariable({"controls_nat": ZScore(dims=("date",))}))])
         state = pipe.fit(mixed_grain_ds)
         with pytest.raises(TypeError, match="Union"):
@@ -149,7 +149,7 @@ class TestAffine:
 
 class TestStatePersistence:
     def test_state_tree_netcdf_roundtrip(self, mixed_grain_ds, tmp_path):
-        union = make_union(_branch_digital(), _branch_inflation())
+        union = make_union(_branch_digital(), _branch_seasonality())
         state = union.fit(mixed_grain_ds)
         path = tmp_path / "union_state.nc"
         state_tree(state).to_netcdf(path)
@@ -158,7 +158,7 @@ class TestStatePersistence:
         reloaded = state_from_tree(loaded)  # nested dicts like fit returned
         out = union.transform(mixed_grain_ds, state)
         out_reloaded = union.transform(mixed_grain_ds, reloaded)
-        for var in ("price_rel_comp", "price_rel_infl"):
+        for var in ("level_vs_reference", "level_vs_seasonality"):
             assert np.allclose(out[var].values, out_reloaded[var].values)
 
 

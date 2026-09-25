@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from xscalers.scalers import FixedScaler, Func, MeanScaler, ZScore
+from xscalers.preprocessing import FixedScaler, Func, MeanScaler, ZScore
 
 
 class TestFixedScaler:
@@ -163,17 +163,17 @@ class TestFunctionTransformer:
     """Named elementwise non-affine maps: the ratio→log chain's second half."""
 
     def test_log_parity_per_variable(self, mixed_grain_ds):
-        ft = Func({"relative_price": "log"})
+        ft = Func({"level_ratio": "log"})
         # mapping keys reference *variables*; a dataset may be fit directly,
         # and the derived variable must be built without the coord-collision
         # NaN trap (scalar selections squeeze the `control` dim)
         probe = mixed_grain_ds.assign(
-            relative_price=mixed_grain_ds["controls"].sel(control="price")
-            / mixed_grain_ds["controls"].sel(control="comp_price")
+            level_ratio=mixed_grain_ds["controls"].sel(control="level")
+            / mixed_grain_ds["controls"].sel(control="reference")
         )
         state = ft.fit(probe)
         out = ft.transform(probe, state)
-        assert np.allclose(out["relative_price"].values, np.log(probe["relative_price"].values))
+        assert np.allclose(out["level_ratio"].values, np.log(probe["level_ratio"].values))
 
     def test_mapping_scopes_to_named_variables(self, national_ds):
         ft = Func({"target": "log"})
@@ -198,7 +198,7 @@ class TestFunctionTransformer:
         assert len(state.data_vars) == 0
 
     def test_xscalers_affine_refuses_non_affine_steps(self, mixed_grain_ds):
-        from xscalers.dispatch import PerVariable
+        from xscalers.compose import PerVariable
         from xscalers.pipeline import Pipeline
 
         pipe = Pipeline(

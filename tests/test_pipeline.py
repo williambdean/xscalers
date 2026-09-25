@@ -6,17 +6,17 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from xscalers import scalers
+from xscalers import preprocessing
+from xscalers.compose import PerVariable
 from xscalers.core import from_spec
-from xscalers.dispatch import PerVariable
 from xscalers.pipeline import Pipeline, make_pipeline
 
 
 def _make():
     return Pipeline(
         [
-            ("target", PerVariable({"target": scalers.ZScore(dims=("date",))})),
-            ("media", PerVariable({"media": scalers.MeanScaler(dims=("date",))})),
+            ("target", PerVariable({"target": preprocessing.ZScore(dims=("date",))})),
+            ("media", PerVariable({"media": preprocessing.MeanScaler(dims=("date",))})),
         ]
     )
 
@@ -170,12 +170,12 @@ class TestPassthroughSteps:
 
 class TestMakePipeline:
     def test_auto_names_from_class(self, national_ds):
-        z = scalers.ZScore(dims=("date",))
-        m = scalers.MeanScaler(dims=("date",))
+        z = preprocessing.ZScore(dims=("date",))
+        m = preprocessing.MeanScaler(dims=("date",))
         pipe = make_pipeline(z, m)
         assert [name for name, _ in pipe.steps] == ["zscore", "meanscaler"]
 
     def test_repeated_transformers_get_suffixed_names(self):
-        z1, z2 = scalers.ZScore(), scalers.ZScore()
+        z1, z2 = preprocessing.ZScore(), preprocessing.ZScore()
         pipe = make_pipeline(z1, z2)
         assert [name for name, _ in pipe.steps] == ["zscore", "zscore-1"]

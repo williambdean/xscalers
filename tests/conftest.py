@@ -31,7 +31,7 @@ def national_ds(rng):
 def mixed_grain_ds():
     """Variables at different grains: national media, geo media, product
     controls (+ a controls variable whose `control` coordinate holds
-    price/comp_price, the derived-metrics shape)."""
+    level/reference, the derived-metrics shape)."""
     from xscalers.datasets import load_mixed_grain
 
     return load_mixed_grain()

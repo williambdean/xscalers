@@ -10,14 +10,14 @@ pytest.importorskip("pytensor")
 import pytensor
 import pytensor.xtensor as ptx
 
-from xscalers import scalers
+from xscalers import preprocessing
 
 
 class TestLiftState:
     def test_dataarray_state_entry_lifts_with_dims(self, national_ds):
         from xscalers.binding import lift_state
 
-        state = scalers.MeanScaler(dims=("date",)).fit(national_ds["media"])
+        state = preprocessing.MeanScaler(dims=("date",)).fit(national_ds["media"])
         lifted = lift_state(state)
         assert lifted["scale"].dims == ("channel",)
         assert type(lifted["center"]).__name__ == "XTensorConstant"
@@ -25,7 +25,7 @@ class TestLiftState:
     def test_lift_is_idempotent_for_symbolic_entries(self, national_ds):
         from xscalers.binding import lift_state
 
-        state = scalers.MeanScaler(dims=("date",)).fit(national_ds["media"])
+        state = preprocessing.MeanScaler(dims=("date",)).fit(national_ds["media"])
         symbol = ptx.xtensor("scale", dims=("channel",))
         lifted = lift_state({"center": state["center"], "scale": symbol})
         assert lifted["scale"] is symbol
@@ -33,7 +33,7 @@ class TestLiftState:
     def test_dataarray_lift_strips_coords(self, national_ds):
         from xscalers.binding import lift_state
 
-        state = scalers.MeanScaler(dims=("date",)).fit(national_ds["media"])
+        state = preprocessing.MeanScaler(dims=("date",)).fit(national_ds["media"])
         lifted = lift_state(state)
         # symbolic entries have no coord carrier: accessing coords raises
         with pytest.raises(NotImplementedError):
@@ -45,7 +45,7 @@ class TestLiftState:
 class TestSymbolicTransformFromFittedState:
     def test_fit_mean_scaler_unscales_symbolic_contributions(self, national_ds):
         """The MMM pattern: fit on xarray, unscale in-graph contributions."""
-        scaler = scalers.MeanScaler(dims=("date",))
+        scaler = preprocessing.MeanScaler(dims=("date",))
         state = scaler.fit(national_ds["media"])
 
         contrib = ptx.xtensor("channel_contrib", dims=("date", "channel"))
@@ -57,7 +57,7 @@ class TestSymbolicTransformFromFittedState:
         assert np.allclose(f(value), expected)
 
     def test_symbolic_zscore_forward_matches_xarray(self, national_ds):
-        scaler = scalers.ZScore(dims=("date",))
+        scaler = preprocessing.ZScore(dims=("date",))
         da = national_ds["media"]
         state = scaler.fit(da)
 
@@ -70,7 +70,7 @@ class TestSymbolicTransformFromFittedState:
 
     def test_post_sampling_style_xarray_unscale_with_extra_dims(self, national_ds):
         """After sampling, contributions carry (chain, draw, ...) — state broadcasts over them."""
-        scaler = scalers.MeanScaler(dims=("date",))
+        scaler = preprocessing.MeanScaler(dims=("date",))
         da = national_ds["media"]
         state = scaler.fit(da)
 
@@ -83,7 +83,7 @@ class TestSymbolicTransformFromFittedState:
         assert np.allclose(out.values, contrib.values * da.mean("date").values)
 
     def test_symbolic_state_with_geo_kept_dims(self, mixed_grain_ds):
-        scaler = scalers.ZScore(dims=("date",))
+        scaler = preprocessing.ZScore(dims=("date",))
         da = mixed_grain_ds["media_digital"]  # (date, geo, media)
         state = scaler.fit(da)
 

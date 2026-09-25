@@ -11,6 +11,7 @@
 """
 
 from .binding import lift_state, lift_state_if_symbolic
+from .compose import PerVariable
 from .container import flatten, reassemble, state_tree
 from .core import (
     REGISTRY,
@@ -22,12 +23,10 @@ from .core import (
     register,
 )
 from .datasets import load_media_channels, load_mixed_grain, load_national
-from .dispatch import PerVariable
 from .persistence import append_state
 from .pipeline import BoundStep, Pipeline, Union, make_pipeline, make_union
-from .scalers import FixedScaler, Func, MeanScaler, ZScore
+from .preprocessing import Derive, FixedScaler, Func, MeanScaler, Selector, Splitter, ZScore
 from .serialize import from_spec, to_spec
-from .shape import Derive, Selector, Splitter
 
 __all__ = [
     "REGISTRY",

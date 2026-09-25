@@ -1,20 +1,20 @@
-"""PerVariable dispatch: different scalers per variable, mixed grains, passthrough."""
+"""compose.PerVariable: one recipe per variable, mixed grains, passthrough/drop defaults."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from xscalers import scalers
-from xscalers.dispatch import PerVariable
+from xscalers import preprocessing
+from xscalers.compose import PerVariable
 
 
 def _make():
     return PerVariable(
         {
-            "media_national": scalers.MeanScaler(dims=("date",)),
-            "media_digital": scalers.ZScore(dims=("date",)),
-            "media_tv": scalers.FixedScaler(scale=1_000_000),
+            "media_national": preprocessing.MeanScaler(dims=("date",)),
+            "media_digital": preprocessing.ZScore(dims=("date",)),
+            "media_tv": preprocessing.FixedScaler(scale=1_000_000),
         }
     )
 
@@ -31,7 +31,7 @@ class TestFit:
         assert state["media_tv"]["scale"].dims == () or "scale" in state["media_tv"]
 
     def test_dataarray_input_fits_named_variable(self, national_ds):
-        state = scalers.MeanScaler(dims=("date",)).fit(national_ds["media"])
+        state = preprocessing.MeanScaler(dims=("date",)).fit(national_ds["media"])
         assert state["scale"].dims == ("channel",)
 
 
@@ -67,7 +67,7 @@ class TestTransform:
 class TestDataTreeDispatch:
     def test_tree_input_fit_and_transform(self, split_tree):
         dispatch = PerVariable(
-            {"media": scalers.MeanScaler(dims=("date",)), "controls": scalers.ZScore(dims=("date",))}
+            {"media": preprocessing.MeanScaler(dims=("date",)), "controls": preprocessing.ZScore(dims=("date",))}
         )
         state = dispatch.fit(split_tree)
         out = dispatch.transform(split_tree, state)
@@ -79,7 +79,7 @@ class TestDataTreeDispatch:
 class TestDropDefault:
     def test_drop_removes_unmapped_variables(self, mixed_grain_ds):
         dispatch = PerVariable(
-            {"media_national": scalers.MeanScaler(dims=("date",))}, default="drop"
+            {"media_national": preprocessing.MeanScaler(dims=("date",))}, default="drop"
         )
         state = dispatch.fit(mixed_grain_ds)
         out = dispatch.transform(mixed_grain_ds, state)
@@ -93,7 +93,7 @@ class TestDropDefault:
     def test_drop_plus_passthrough_explicit(self, mixed_grain_ds):
         dispatch = PerVariable(
             {
-                "media_national": scalers.MeanScaler(dims=("date",)),
+                "media_national": preprocessing.MeanScaler(dims=("date",)),
                 "controls_nat": "passthrough",
             },
             default="drop",
@@ -108,13 +108,13 @@ class TestMappingValidation:
 
     def test_unknown_mapping_key_warns(self, mixed_grain_ds):
         """A coordinate name ('date') is not a data variable — must warn, not scale silently."""
-        dispatch = PerVariable({"date": scalers.MeanScaler(dims=("date",))})
+        dispatch = PerVariable({"date": preprocessing.MeanScaler(dims=("date",))})
         with pytest.warns(UserWarning, match="missing from the input"):
             dispatch.fit(mixed_grain_ds)
 
     def test_unmatched_keys_listed_with_suggestion(self, mixed_grain_ds):
         """Closest-name hint: typo-like mapping entries are discoverable."""
-        dispatch = PerVariable({"media_natoinal": scalers.MeanScaler(dims=("date",))})
+        dispatch = PerVariable({"media_natoinal": preprocessing.MeanScaler(dims=("date",))})
         with pytest.warns(UserWarning, match="media_natoinal"):
             dispatch.fit(mixed_grain_ds)
 
@@ -124,7 +124,7 @@ class TestUnknownInputVariable:
 
     def test_transform_of_unscaled_variable_passthrough_with_state(self, mixed_grain_ds):
         """Unmapped-but-present variables pass through even when other keys scale."""
-        dispatch = PerVariable({"media_national": scalers.MeanScaler(dims=("date",))})
+        dispatch = PerVariable({"media_national": preprocessing.MeanScaler(dims=("date",))})
         state = dispatch.fit(mixed_grain_ds)
         out = dispatch.transform(mixed_grain_ds, state)
         assert np.allclose(out["media_tv"].values, mixed_grain_ds["media_tv"].values)

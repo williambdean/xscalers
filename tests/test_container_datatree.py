@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
-from xscalers import scalers
+from xscalers import preprocessing
 from xscalers.container import flatten, reassemble, state_tree
 
 
@@ -43,20 +43,20 @@ class TestUnflatten:
 
 class TestStateTree:
     def test_state_tree_builds_nesting_from_compound_keys(self, split_tree):
-        from xscalers.dispatch import PerVariable
+        from xscalers.compose import PerVariable
 
         dispatch = PerVariable(
-            {"media": scalers.FixedScaler(scale=100.0), "controls": scalers.ZScore(dims=("date",))}
+            {"media": preprocessing.FixedScaler(scale=100.0), "controls": preprocessing.ZScore(dims=("date",))}
         )
         state = dispatch.fit(split_tree)
         tree = state_tree(state)
         assert "scale" in tree.children["media"].dataset
 
     def test_state_tree_netcdf_roundtrip(self, split_tree, tmp_path):
-        from xscalers.dispatch import PerVariable
+        from xscalers.compose import PerVariable
 
         dispatch = PerVariable(
-            {"media": scalers.FixedScaler(scale=100.0), "controls": scalers.ZScore(dims=("date",))}
+            {"media": preprocessing.FixedScaler(scale=100.0), "controls": preprocessing.ZScore(dims=("date",))}
         )
         state = dispatch.fit(split_tree)
         path = tmp_path / "state.nc"

@@ -29,7 +29,8 @@ work with no special casing.
 ```python
 import xarray as xr
 
-from xscalers import MeanScaler, load_national, load_mixed_grain
+from xscalers.datasets import load_mixed_grain, load_national
+from xscalers.preprocessing import MeanScaler
 
 national: xr.Dataset = load_national()
 
@@ -49,8 +50,9 @@ its own state:
 ```python
 import xarray as xr
 
-from xscalers import FixedScaler, MeanScaler, ZScore, load_mixed_grain
-from xscalers.dispatch import PerVariable
+from xscalers.compose import PerVariable
+from xscalers.datasets import load_mixed_grain
+from xscalers.preprocessing import FixedScaler, MeanScaler, ZScore
 
 mixed: xr.Dataset = load_mixed_grain()
 dispatch = PerVariable(
@@ -65,51 +67,78 @@ state = dispatch.fit(mixed)              # one Dataset state per variable
 scaled = dispatch.transform(mixed, state)  # each var scaled by its own recipe
 ```
 
-## Derived metrics — ratios of coordinate values (then logs, etc.)
+## Derived metrics — new variables, even across grains
 
-Take a ratio of two *coordinate values* inside one variable — here
-`price / comp_price` within `controls (date, product, control)` — as a new
-variable in the pipeline, then transform/scale it like anything else:
+`Derive` turns selected pieces of existing variables into a *new* variable
+that later steps treat like anything else. The two pieces don't have to come
+from the same variable or the same grain — a national series over a
+product-grain control broadcasts up to product grain, so `tv_per_control`
+below is a product-grain variable built from a national input:
 
 ```python
 import xarray as xr
 
-from xscalers import Pipeline, Func, Splitter, ZScore
-from xscalers.dispatch import PerVariable
+from xscalers.compose import PerVariable
 from xscalers.datasets import load_mixed_grain
-from xscalers.shape import Derive
+from xscalers.pipeline import Pipeline
+from xscalers.preprocessing import Derive, Func, Splitter, ZScore
 
 mixed: xr.Dataset = load_mixed_grain()
-mixed["controls"]                     # coords: control = [price, comp_price]
+mixed["media_national"].dims                  # (date, media) — national grain
+mixed["controls_prod"].dims                    # (date, product) — product grain
 
 pipe = Pipeline(
     [
         (
             "derive",
             Derive(
-                name="relative_price",
-                numerator=("controls", {"control": "price"}),
-                denominator=("controls", {"control": "comp_price"}),
+                name="tv_per_control",
+                numerator=("media_national", {"media": "tv"}),
+                denominator=("controls_prod", {}),   # {} = the whole variable
                 op="ratio",
             ),
         ),
-        ("log", Func({"relative_price": "log"})),       # named funcs; log1p for zeros
-        ("scale", PerVariable({"relative_price": ZScore(dims=("date",))})),
+        ("log", Func({"tv_per_control": "log"})),    # named funcs; log1p for zeros
+        ("scale", PerVariable({"tv_per_control": ZScore(dims=("date",))})),
     ]
 )
 state = pipe.fit(mixed)
 scaled = pipe.transform(mixed, state)
+scaled["tv_per_control"].dims                  # (date, product) — broadcast, then scaled
 
 back = pipe.inverse_transform(scaled, state)
 import numpy as np
-np.testing.assert_allclose(back["controls"], mixed["controls"])
+np.testing.assert_allclose(back["controls_prod"], mixed["controls_prod"])
 ```
 
+Because the z-score reduces over `date` only, each product keeps its own
+mean and standard deviation — the per-variable, per-group treatment that
+mixed-grain data needs, with no reshaping.
+
 `inverse_transform` drops the derived variable and restores the inputs — so
-the whole chain (derive → log → z-score — unzscore → exp — un-derive)
+the whole chain (derive → log → z-score — unzscore → exp → un-derive)
 round-trips. Note that a log makes the target path non-affine: `pipe.affine()`
 will refuse such pipelines, and real-terms contributions must go through the
 batched `inverse_transform` instead of the `(β, scale)` shortcut.
+
+The same step derives within one variable too, when the variable carries an
+extra coordinate dimension — `controls (date, product, control)` with
+`control = [level, reference, seasonality]`:
+
+```python
+# continues above — `mixed` carries over
+from xscalers.preprocessing import Derive
+
+share = Derive(
+    name="level_ratio",
+    numerator=("controls", {"control": "level"}),
+    denominator=("controls", {"control": "reference"}),
+    op="ratio",
+)
+derived = share.transform(mixed, share.fit(mixed))
+derived["level_ratio"].dims                   # (date, product)
+```
+
 
 ## Splitting one variable into differently-treated pieces
 
@@ -121,9 +150,10 @@ under a piece-specific dim name; `inverse_transform` recombines and restores
 the original coordinate order:
 
 ```python
-from xscalers import FixedScaler, MeanScaler, Pipeline, Splitter
-from xscalers.dispatch import PerVariable
+from xscalers.compose import PerVariable
 from xscalers.datasets import load_media_channels
+from xscalers.pipeline import Pipeline
+from xscalers.preprocessing import FixedScaler, MeanScaler, Splitter
 
 ds = load_media_channels()
 
@@ -169,8 +199,8 @@ you'll meet in practice:
 import os
 import xarray as xr
 import numpy as np
-from xscalers import MeanScaler
 from xscalers.datasets import load_national
+from xscalers.preprocessing import MeanScaler
 
 national: xr.Dataset = load_national()
 scaler = MeanScaler(dims=("date",))
@@ -192,8 +222,11 @@ native:
 ```python
 # continues above — `xr`, `mixed` and the fitted `dispatch` carry over
 from pathlib import Path
-from xscalers import MeanScaler, PerVariable, append_state, load_mixed_grain
+from xscalers.compose import PerVariable
 from xscalers.container import state_tree
+from xscalers.datasets import load_mixed_grain
+from xscalers.persistence import append_state
+from xscalers.preprocessing import MeanScaler
 
 store: Path = Path("mmm.zarr")               # your existing input store
 mixed: xr.Dataset = load_mixed_grain()       # pretend it already lives there
@@ -220,8 +253,8 @@ config, state is data, never the two mixed:
 # requires-pymc
 import pymc as pm
 import arviz as az
-from xscalers import MeanScaler
 from xscalers.datasets import load_national
+from xscalers.preprocessing import MeanScaler
 
 national = load_national()
 scaler = MeanScaler(dims=("date",))
@@ -274,10 +307,10 @@ silently wrong:
 ```python
 import numpy as np
 import xarray as xr
-from xscalers import Func, FixedScaler, ZScore, load_mixed_grain
-from xscalers.dispatch import PerVariable
+from xscalers.compose import PerVariable
+from xscalers.datasets import load_mixed_grain
 from xscalers.pipeline import Pipeline
-from xscalers.shape import Derive
+from xscalers.preprocessing import Derive, Func, FixedScaler, ZScore
 import os
 
 pipe = Pipeline(
@@ -285,20 +318,20 @@ pipe = Pipeline(
         (
             "derive",
             Derive(
-                name="price_rel_comp",
-                numerator=("controls", {"control": "price"}),
-                denominator=("controls", {"control": "comp_price"}),
+                name="tv_per_control",
+                numerator=("media_national", {"media": "tv"}),
+                denominator=("controls_prod", {}),
                 op="ratio",
             ),
         ),
-        ("log", Func({"price_rel_comp": "log"})),
-        ("scale", PerVariable({"price_rel_comp": FixedScaler(scale=1.0)})),
+        ("log", Func({"tv_per_control": "log"})),
+        ("scale", PerVariable({"tv_per_control": FixedScaler(scale=1.0)})),
     ]
 )
 state = pipe.fit(load_mixed_grain())
 contrib = xr.DataArray(np.full((104, 4), -0.75), dims=("date", "product"))
 
-y_real = pipe.unscale(contrib, var="price_rel_comp")   # one verb; located = exp(−0.75)
+y_real = pipe.unscale(contrib, var="tv_per_control")   # one verb; located = exp(−0.75)
 np.testing.assert_allclose(y_real, np.exp(contrib))
 ```
 
@@ -308,10 +341,10 @@ Requires the optional `pytensor` extra (`pip install "xscalers[pytensor]"`).
 
 ```python
 import pytensor.xtensor as ptx
-from xscalers import MeanScaler
+from xscalers.compose import PerVariable
 from xscalers.datasets import load_national
 from xscalers.pipeline import Pipeline
-from xscalers.dispatch import PerVariable
+from xscalers.preprocessing import MeanScaler
 
 scaler = MeanScaler(dims=("date",))
 data = load_national()
@@ -328,9 +361,9 @@ the same state broadcasts over those extra dims by name.
 ## Writing it out: post-fit step access
 
 ```python
-from xscalers import MeanScaler
-from xscalers.pipeline import make_pipeline
 from xscalers.datasets import load_national
+from xscalers.pipeline import make_pipeline
+from xscalers.preprocessing import MeanScaler
 
 pipe = make_pipeline(MeanScaler(dims=("date",)), MeanScaler(dims=("date",)))
 assert [name for name, _ in pipe.steps] == ["meanscaler", "meanscaler-1"]
