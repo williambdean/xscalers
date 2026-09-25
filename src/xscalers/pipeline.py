@@ -122,6 +122,10 @@ class Pipeline:
 
         Raises TypeError if any step is not affine — a shape-changing step
         would silently produce a wrong mapping otherwise.
+
+        This is a *diagnostic* view of what the pipeline decided (and the
+        internals behind :meth:`unscale`); model code should call
+        ``pipe.unscale(x, var=...)`` rather than applying the pair by hand.
         """
         composed: dict[str, xr.Dataset] = {}
         for (name, step), step_state in zip(self.steps, state.values(), strict=True):
@@ -139,6 +143,60 @@ class Pipeline:
                 else:
                     composed[key] = xr.Dataset({"center": center, "scale": scale})
         return composed
+
+    def unscale(self, x: Any, *, var: str, state: Mapping[str, Any] | None = None) -> Any:
+        """Convert a scaled-space contribution back into real units — one verb.
+
+        For affine pipelines this applies the composed ``(center, scale)``
+        pair per variable (symbolic ``pytensor.xtensor`` contributions com-
+        pose identically). For pipelines that contain non-affine steps (e.g.
+        a log transform on this variable) the fallback walks *this varia-
+        ble's own* steps backwards — un-log, un-scale — stopping at the step
+        that *created* the variable (e.g. ``Derive``), so the result is the
+        pre-pipeline value of that variable in real units, not a knock-on
+        restoration of unrelated inputs. `var` names a **data variable** of
+        the contributions (never a coordinate). The state defaults to the
+        fitted ``states_``; pass ``state=`` explicitly for pipelines rebuilt
+        from specs.
+        """
+        chosen = state if state is not None else self.states_
+        if chosen is None:
+            raise RuntimeError(
+                "Pipeline has no fitted state (was this pipeline rebuilt with "
+                "from_spec?); pass state=<state> explicitly or bind one"
+            )
+        if any(getattr(step, "affine_view", None) is None for _, step in self.steps):
+            # non-affine pipeline: partial inverse — from the last step back,
+            # owned variables are inverted; creation steps STOP the walk
+            current_value: Any = (
+                xr.Dataset({var: x}) if isinstance(x, xr.DataArray) else x
+            )
+            if var not in current_value.data_vars:
+                raise KeyError(
+                    f"No data variable named {var!r}; variables: "
+                    f"{sorted(map(str, current_value.data_vars))}"
+                )
+            for name, step in reversed(self.steps):
+                step_state = chosen[name]
+                if _step_creates_var(step, step_state, var):
+                    break  # stop *before* the step that created the variable
+                if _step_owns(step, step_state, var):
+                    current_value = step.inverse_transform(current_value, step_state)
+            if isinstance(x, xr.DataArray):
+                return current_value[var]
+            return current_value
+        try:
+            pair = self.affine(chosen)[var]
+        except KeyError as err:
+            composed = self.affine(chosen)
+            raise KeyError(
+                f"No data variable named {var!r} in the composed affine view; "
+                f"available: {sorted(str(key) for key in composed)}"
+            ) from err
+        from .binding import lift_state_if_symbolic
+
+        pair_lifted = lift_state_if_symbolic(x, pair)
+        return x * pair_lifted["scale"] + pair_lifted["center"]
 
     # -- state artifact ------------------------------------------------------
 
@@ -323,3 +381,26 @@ def make_union(*branches: Any, collisions: str = "require_equal") -> Union:
         resolved.append((base if count == 1 else f"{base}-{count - 1}", branch))
     return Union(branches=resolved, collisions=collisions)
 
+
+
+def _step_owns(step: Any, step_state: Any, var: str) -> bool:
+    """Does this step transform ``var`` (i.e. would its inverse participate)?"""
+    # PerVariable/dispatch: the per-variable mapping owns vars whose key exists
+    if isinstance(step_state, Mapping) and var in step_state:
+        return True
+    # dataset-level per-variable states nest one further level
+    if isinstance(step_state, Mapping):
+        for value in step_state.values():
+            if isinstance(value, Mapping) and var in value:
+                return True
+    # scalar-step states: the affine view owns variables listed in its state
+    view = getattr(step, "affine_view", None)
+    if view is not None:
+        return var in getattr(view(step_state), "data_vars", {})
+    return False
+
+
+def _step_creates_var(step: Any, step_state: Any, var: str) -> bool:
+    """True when the step *produced* the variable (a Derive-style check)."""
+    attrs = getattr(step_state, "attrs", None)
+    return isinstance(attrs, Mapping) and attrs.get("derived") == var
