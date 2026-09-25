@@ -1,15 +1,29 @@
-"""preprocessing data-movement steps: Splitter (invertible), Selector (honestly
-non-invertible), Derive (stateless, cross-grain capable)."""
+"""preprocessing data-movement steps: Splitter (invertible), Selector and
+Dropper (honestly non-invertible), Derive (stateless, cross-grain
+capable)."""
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
+import xarray as xr
 
 from xscalers.compose import VariableTransformer
-from xscalers.core import NonInvertibleError, from_spec
+from xscalers.container import state_tree
+from xscalers.core import NonInvertibleError, from_spec, to_spec
 from xscalers.pipeline import Pipeline
-from xscalers.preprocessing import Derive, FixedScaler, Func, MeanScaler, Selector, Splitter, ZScore
+from xscalers.preprocessing import (
+    Derive,
+    Dropper,
+    FixedScaler,
+    Func,
+    MeanScaler,
+    Selector,
+    Splitter,
+    ZScore,
+)
 
 DIGITAL = ["search", "social", "fb"]
 TV = ["tv", "stream"]
@@ -93,6 +107,148 @@ class TestSelector:
         state = selector.fit(split_tree)
         with pytest.raises(NonInvertibleError):
             selector.inverse_transform(split_tree, state)
+
+
+class TestDropper:
+    """Dropper removes whole variables and/or dataset-wide coordinate
+    values — sklego's ColumnDropper adapted to xarray; honestly
+    non-invertible like Selector."""
+
+    def test_drops_named_variables_and_leaves_the_rest_identical(self, mixed_grain_ds):
+        ds = mixed_grain_ds
+        dropper = Dropper(vars=["media_national"])
+        out = dropper.transform(ds, dropper.fit(ds))
+        assert "media_national" not in out.data_vars
+        for name in set(ds.data_vars) - {"media_national"}:
+            xr.testing.assert_identical(out[name], ds[name])
+
+    def test_drops_coordinate_values_dataset_wide(self, mixed_grain_ds):
+        ds = mixed_grain_ds
+        dropper = Dropper(labels={"control": ["reference"]})
+        out = dropper.transform(ds, dropper.fit(ds))
+        assert "reference" not in out.coords["control"].values
+        # the variable living on `control` shrinks with the coordinate
+        assert out.sizes["control"] == ds.sizes["control"] - 1
+        np.testing.assert_allclose(
+            out["controls"].sel(product="p1", control="level").values,
+            ds["controls"].sel(product="p1", control="level").values,
+        )
+
+    def test_accepts_a_bare_variable_name(self, national_ds):
+        dropper = Dropper(vars="media")
+        out = dropper.transform(national_ds, dropper.fit(national_ds))
+        assert set(out.data_vars) == {"target"}
+
+    def test_drops_variables_and_labels_together(self, mixed_grain_ds):
+        ds = mixed_grain_ds
+        dropper = Dropper(vars=["controls_prod"], labels={"control": ["reference"]})
+        out = dropper.transform(ds, dropper.fit(ds))
+        assert "controls_prod" not in out.data_vars
+        assert "reference" not in out.coords["control"].values
+
+    def test_inverse_raises(self, national_ds):
+        dropper = Dropper(vars="media")
+        state = dropper.fit(national_ds)
+        with pytest.raises(NonInvertibleError):
+            dropper.inverse_transform(national_ds, state)
+
+    def test_unknown_variable_raises_at_fit(self, national_ds):
+        with pytest.raises(KeyError):
+            Dropper(vars=["nope"]).fit(national_ds)
+
+    def test_unknown_label_raises_at_fit(self, national_ds):
+        with pytest.raises(KeyError):
+            Dropper(labels={"channel": ["tiktok"]}).fit(national_ds)
+
+    def test_dropping_every_variable_raises_at_fit(self, national_ds):
+        with pytest.raises(ValueError, match="empty"):
+            Dropper(vars=["target", "media"]).fit(national_ds)
+
+    def test_neither_vars_nor_labels_raises_at_construction(self):
+        with pytest.raises(ValueError):
+            Dropper()
+
+    def test_non_dataset_input_raises(self, national_ds):
+        da = national_ds["media"]
+        with pytest.raises(TypeError):
+            Dropper(vars="target").fit(da)
+
+    def test_state_records_what_was_dropped(self, mixed_grain_ds):
+        state = Dropper(vars=["media_national"], labels={"control": ["reference"]}).fit(
+            mixed_grain_ds
+        )
+        assert state.attrs["kind"] == "drop"
+        # JSON strings, so a pipeline state still writes to netcdf
+        assert json.loads(state.attrs["dropped_vars"]) == ["media_national"]
+        assert json.loads(state.attrs["dropped_labels"]) == {"control": ["reference"]}
+
+    def test_pipeline_state_survives_netcdf(self, mixed_grain_ds, tmp_path):
+        """A Dropper step's state must stay netCDF-writable — the recipe is
+        in the spec, the attrs are JSON strings."""
+        pipe = Pipeline([("prune", Dropper(vars=["media_national"], labels={"control": ["reference"]}))])
+        tree = state_tree(pipe.fit(mixed_grain_ds))
+        path = tmp_path / "dropper_state.nc"
+        tree.to_netcdf(path)
+        reopened = xr.open_datatree(path)
+        assert json.loads(reopened["prune"].dataset.attrs["dropped_vars"]) == ["media_national"]
+        assert json.loads(reopened["prune"].dataset.attrs["dropped_labels"]) == {
+            "control": ["reference"]
+        }
+
+    def test_spec_round_trip(self, mixed_grain_ds):
+        spec = to_spec(Dropper(vars=["media_national"], labels={"control": ["reference"]}))
+        rebuilt = from_spec(spec)
+        assert isinstance(rebuilt, Dropper)
+        ds = mixed_grain_ds
+        reference = Dropper(vars=["media_national"], labels={"control": ["reference"]})
+        xr.testing.assert_identical(
+            rebuilt.transform(ds, rebuilt.fit(ds)),
+            reference.transform(ds, reference.fit(ds)),
+        )
+
+    def test_pipeline_derives_then_prunes_raw_inputs(self, mixed_grain_ds):
+        """The motivating workflow: derive a ratio, then stop carrying the
+        raw variables downstream."""
+        deriver = Derive(
+            name="tv_per_control",
+            numerator=("media_national", {"media": "tv"}),
+            denominator=("controls_prod", {}),
+            op="ratio",
+        )
+        pipe = Pipeline(
+            [
+                ("derive", deriver),
+                ("prune", Dropper(vars=["media_national", "controls_prod"])),
+                ("scale", VariableTransformer({"tv_per_control": ZScore(dims=("date", "control"))})),
+            ]
+        )
+        ds = mixed_grain_ds
+        out = pipe.fit_transform(ds)
+        assert set(out.data_vars) == {
+            "media_digital",
+            "media_tv",
+            "controls_nat",
+            "controls",
+            "tv_per_control",
+        }
+        with pytest.raises(NonInvertibleError):
+            pipe.inverse_transform(out, pipe.states_)
+        np.testing.assert_allclose(
+            pipe.unscale(out, var="tv_per_control")["tv_per_control"].values,
+            deriver.transform(ds, deriver.fit(ds))["tv_per_control"].values,
+        )
+
+    def test_unscale_keeps_working_for_surviving_variables(self, national_ds):
+        pipe = Pipeline(
+            [
+                ("drop", Dropper(vars="media")),
+                ("scale", VariableTransformer({"target": ZScore(dims=("date",))})),
+            ]
+        )
+        out = pipe.fit_transform(national_ds)
+        np.testing.assert_allclose(
+            pipe.unscale(out, var="target")["target"].values, national_ds["target"].values
+        )
 
 
 class TestDerive:

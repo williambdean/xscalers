@@ -35,10 +35,10 @@ interest — read it before changing behavior.
    (`to_spec`/`from_spec`, zero-dep); fitted state serializes to netCDF
    artifacts (`state_tree.to_netcdf`). They never mix.
 6. **Shape-changing steps are honest.** `Splitter` is invertible (pieces are
-   DataTree child nodes; recombine = concat back). `Selector` (and anything
-   aggregation-like) is not — its `inverse_transform` raises rather than
-   guessing. Aggregation/dedup stay upstream xarray ops (`resample`,
-   `groupby`, `drop_duplicates`), outside the pipeline.
+   DataTree child nodes; recombine = concat back). `Selector` and `Dropper`
+   (and anything aggregation-like) are not — their `inverse_transform` raises
+   rather than guessing. Aggregation/dedup stay upstream xarray ops
+   (`resample`, `groupby`, `drop_duplicates`), outside the pipeline.
 
 ## The contract
 
@@ -63,7 +63,7 @@ class BaseTransformer:
 
 | xscalers | sklearn | holds |
 | --- | --- | --- |
-| `preprocessing` | `preprocessing` | `ZScore`, `MeanScaler`, `FixedScaler`, `Func`, `Derive`, `Splitter`, `Selector` |
+| `preprocessing` | `preprocessing` | `ZScore`, `MeanScaler`, `FixedScaler`, `Func`, `Derive`, `Splitter`, `Selector`, `Dropper` |
 | `compose` | `compose` | `VariableTransformer` (the ColumnTransformer analog) |
 | `pipeline` | `pipeline` | `Pipeline`, `Union`, `make_pipeline`, `make_union` |
 | `datasets` | `datasets` | `load_national`, `load_mixed_grain`, `load_media_channels` |
@@ -120,7 +120,9 @@ flagship cross-backend parity test passing before any refactor.
   apply one fitted transformation to new data: ``pipe["media"].transform(...)``.
 - ``make_pipeline(*steps)`` auto-names from transformer classes
   (``zscore``, ``zscore-1``, ...); ``"passthrough"`` is a valid step value;
-  ``VariableTransformer(..., default="drop")`` drops unmapped variables.
+  ``VariableTransformer(..., default="drop")`` drops unmapped variables while
+  scaling the mapped ones, and ``Dropper(vars=..., labels=...)`` is the
+  standalone drop verb (data-movement steps are not affine — see principle 6).
 
 ## Deferred (documented, not built)
 

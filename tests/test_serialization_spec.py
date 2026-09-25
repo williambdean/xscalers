@@ -35,6 +35,19 @@ class TestSpecRegistry:
         for cls in (preprocessing.FixedScaler, preprocessing.ZScore, preprocessing.MeanScaler, preprocessing.Func):
             assert cls.__name__ in REGISTRY
 
+    def test_data_movement_steps_registered(self):
+        """Derive/Splitter/Selector/Dropper are serializable too — a spec is
+        the recipe for the whole chain, not just its affine steps."""
+        from xscalers.core import REGISTRY
+
+        for cls in (
+            preprocessing.Derive,
+            preprocessing.Splitter,
+            preprocessing.Selector,
+            preprocessing.Dropper,
+        ):
+            assert cls.__name__ in REGISTRY
+
 
 class TestPipelineSpec:
     def test_pipeline_spec_rebuilds_and_refits_identically(self, national_ds):

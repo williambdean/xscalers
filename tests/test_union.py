@@ -9,8 +9,9 @@ import xarray as xr
 from xscalers import Func, MeanScaler, ZScore
 from xscalers.compose import VariableTransformer
 from xscalers.container import state_from_tree, state_tree
+from xscalers.core import NonInvertibleError
 from xscalers.pipeline import Pipeline, make_pipeline, make_union
-from xscalers.preprocessing import Derive
+from xscalers.preprocessing import Derive, Dropper
 
 DIGITAL = ["search", "social", "fb"]
 LINEAR = ["tv", "stream"]
@@ -136,6 +137,17 @@ class TestInverse:
             assert np.allclose(back[var].values, mixed_grain_ds[var].values)
         for name in ("level_vs_reference", "level_vs_seasonality"):
             assert name not in back.data_vars
+
+    def test_dropping_branch_refuses_inverse(self, mixed_grain_ds):
+        """A branch that drops a variable must refuse the whole union
+        inverse — never a silently half-restored result."""
+        union = make_union(
+            _branch_digital(),
+            ("prune", Dropper(vars=["media_national"])),
+        )
+        state = union.fit(mixed_grain_ds)
+        with pytest.raises(NonInvertibleError):
+            union.inverse_transform(union.transform(mixed_grain_ds, state), state)
 
 
 class TestAffine:

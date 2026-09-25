@@ -16,6 +16,7 @@ mean/std map onto this pair, matching PR-2831).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -33,6 +34,7 @@ from .core import (
 
 __all__ = [
     "Derive",
+    "Dropper",
     "FixedScaler",
     "Func",
     "MeanScaler",
@@ -515,6 +517,99 @@ class Selector:
         raise NonInvertibleError(
             "Selection drops data; inverse_transform cannot restore it. Pass "
             "pieces as separate variables, or use Splitter for a reversible split."
+        )
+
+
+@register
+class Dropper:
+    """Drop whole variables and/or coordinate values. Dropping is NOT
+    invertible.
+
+    Two orthogonal modes, usable together:
+
+    - ``vars``: names of whole variables to remove. This is the drop verb
+      for a Dataset — sklego's ``ColumnDropper`` over ``drop_vars``.
+    - ``labels``: ``{dim: labels}`` to remove from that coordinate
+      dataset-wide (``drop_sel``). Contrast ``Selector``, which subsets
+      *within one variable* and leaves the coordinate itself intact.
+
+    The motivating workflow is pruning raw inputs once a derived metric
+    supersedes them::
+
+        Pipeline([
+            ("derive", Derive(name="ratio", numerator=..., denominator=...)),
+            ("prune", Dropper(vars=["media", "controls"])),
+        ])
+
+    ``fit`` is stateless but validates, following sklego: unknown
+    variables/labels raise ``KeyError``, dropping every variable raises
+    ``ValueError`` (a pipeline that erases its input is a config bug), and
+    non-``Dataset`` input raises ``TypeError`` (DataTree deferred).
+    """
+
+    def __init__(
+        self,
+        vars: str | list[str] | None = None,
+        labels: Mapping[str, str | list[str]] | None = None,
+    ):
+        self.vars = [vars] if isinstance(vars, str) else (list(vars) if vars else [])
+        self.labels = {
+            dim: [value] if isinstance(value, str) else list(value)
+            for dim, value in (labels or {}).items()
+        }
+        if not self.vars and not self.labels:
+            raise ValueError("Dropper needs at least one of vars= or labels= to drop")
+
+    def to_spec_kwargs(self) -> dict[str, Any]:
+        return {
+            "vars": list(self.vars),
+            "labels": {dim: list(values) for dim, values in self.labels.items()},
+        }
+
+    def fit(self, X: Any) -> xr.Dataset:
+        if not isinstance(X, xr.Dataset):
+            raise TypeError(
+                f"Dropper takes an xr.Dataset, got {type(X).__name__}; DataTree "
+                "node drops are deferred."
+            )
+        missing = [name for name in self.vars if name not in X.data_vars]
+        if missing:
+            raise KeyError(f"{missing} variable(s) not in dataset")
+        bad_labels = {
+            dim: [value for value in values if value not in X.coords[dim].values]
+            for dim, values in self.labels.items()
+        }
+        bad_labels = {dim: values for dim, values in bad_labels.items() if values}
+        if bad_labels:
+            raise KeyError(f"{bad_labels} label(s) not in dataset coords")
+        remaining = set(X.data_vars) - set(self.vars)
+        if not remaining:
+            raise ValueError(f"Dropping {self.vars} would result in an empty dataset")
+        # JSON strings, not dicts: state attrs must survive to_netcdf (the
+        # whole drop recipe lives in the spec; this copy is for auditing)
+        return as_state(
+            "drop",
+            None,
+            scaled_from=None,
+            attrs={
+                "dropped_vars": json.dumps(self.vars),
+                "dropped_labels": json.dumps(self.labels),
+            },
+        )
+
+    def transform(self, X: Any, state: xr.Dataset) -> Any:
+        out = X
+        if self.vars:
+            out = out.drop_vars(self.vars)
+        if self.labels:
+            out = out.drop_sel(**self.labels)
+        return out
+
+    def inverse_transform(self, X: Any, state: xr.Dataset) -> Any:
+        raise NonInvertibleError(
+            "Dropping removes data; inverse_transform cannot restore it. Keep the "
+            "raw variables as separate pipeline inputs, or use Splitter for a "
+            "reversible split."
         )
 
 

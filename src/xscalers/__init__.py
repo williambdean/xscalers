@@ -25,7 +25,7 @@ from .core import (
 from .datasets import load_media_channels, load_mixed_grain, load_national
 from .persistence import append_state
 from .pipeline import BoundStep, Pipeline, Union, make_pipeline, make_union
-from .preprocessing import Derive, FixedScaler, Func, MeanScaler, Selector, Splitter, ZScore
+from .preprocessing import Derive, Dropper, FixedScaler, Func, MeanScaler, Selector, Splitter, ZScore
 from .serialize import from_spec, to_spec
 
 __all__ = [
@@ -34,6 +34,7 @@ __all__ = [
     "BaseTransformer",
     "BoundStep",
     "Derive",
+    "Dropper",
     "FixedScaler",
     "Func",
     "MeanScaler",

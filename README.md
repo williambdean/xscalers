@@ -139,6 +139,62 @@ derived = share.transform(mixed, share.fit(mixed))
 derived["level_ratio"].dims                   # (date, product)
 ```
 
+## Dropping variables and coordinate values
+
+`Dropper` is the drop verb — the xarray answer to sklego's `ColumnDropper`.
+`vars=` removes whole variables; `labels=` removes values from a coordinate
+dataset-wide (the complement of keeping, which is `Selector`'s job):
+
+```python
+# continues above — `mixed` carries over
+from xscalers.preprocessing import Dropper
+
+prune = Dropper(vars=["media_national", "controls_prod"], labels={"control": ["reference"]})
+pruned = prune.transform(mixed, prune.fit(mixed))
+"media_national" in pruned.data_vars          # False — raw inputs are gone
+"reference" in pruned.coords["control"].values  # False — every variable shrank with it
+```
+
+The motivating shape is pruning raw inputs once a derived metric supersedes
+them, so later steps never have to enumerate what they don't care about:
+
+```python
+# continues above — `mixed` carries over
+from xscalers.compose import VariableTransformer
+from xscalers.pipeline import Pipeline
+from xscalers.preprocessing import Derive, Dropper, ZScore
+
+pipe = Pipeline(
+    [
+        (
+            "derive",
+            Derive(
+                name="tv_per_control",
+                numerator=("media_national", {"media": "tv"}),
+                denominator=("controls_prod", {}),
+                op="ratio",
+            ),
+        ),
+        ("prune", Dropper(vars=["media_national", "controls_prod"])),
+        ("scale", VariableTransformer({"tv_per_control": ZScore(dims=("date",))})),
+    ]
+)
+model_ready = pipe.fit_transform(mixed)
+sorted(model_ready.data_vars)                 # raw inputs pruned, ratio kept
+```
+
+Dropping destroys data, so — like `Selector` — `Dropper.inverse_transform`
+raises instead of guessing, and `pipe.inverse_transform` refuses for the whole
+chain. Real-terms conversion is unaffected: `pipe.unscale(contrib,
+var="tv_per_control")` still walks that one variable backwards. `fit` validates
+rather than failing late (sklego's contract): unknown names raise `KeyError`,
+dropping *every* variable raises `ValueError`, and a non-`Dataset` input raises
+`TypeError` (DataTree node drops are deferred).
+
+If you need the reverse, a pipeline that scales what it keeps, `Splitter` is
+the invertible way to split one variable into differently-treated pieces, and
+`VariableTransformer(..., default="drop")` is the leftover-dropping sibling.
+
 
 ## Splitting one variable into differently-treated pieces
 
@@ -380,6 +436,8 @@ sklearn vocabulary: `fit` / `transform` / `inverse_transform` / `Pipeline`,
 `ColumnTransformer`-style per-variable treatment (that's `VariableTransformer`), `make_pipeline`,
 **`make_union`** (many pipelines over the same dataset, merged with a
 collision policy — covariates-only by design), `"passthrough"` steps. The
+drop verb lives in `Dropper` — sklego's `ColumnDropper` over
+`drop_vars`/`drop_sel`, with `Selector` covering the keeping side. The
 deliberate departure: **state is explicit and passed around**, not hidden as
 `scaler.mean_` — that is what lets you edit fitted values and reuse them
 across backends. The counterpart to `transform` for model code is
