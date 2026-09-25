@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import xarray as xr
 
-from xscalers.scalers import FixedScaler, MeanScaler, ZScore
+from xscalers.scalers import FixedScaler, Func, MeanScaler, ZScore
 
 
 class TestFixedScaler:
@@ -156,3 +157,66 @@ class TestDatasetInputDispatch:
         back = scaler.inverse_transform(out, state)
         for var in mixed_grain_ds.data_vars:
             assert np.allclose(back[var].values, mixed_grain_ds[var].values)
+
+
+class TestFunctionTransformer:
+    """Named elementwise non-affine maps: the ratio→log chain's second half."""
+
+    def test_log_parity_per_variable(self, mixed_grain_ds):
+        ft = Func({"relative_price": "log"})
+        # mapping keys reference *variables*; a dataset may be fit directly,
+        # and the derived variable must be built without the coord-collision
+        # NaN trap (scalar selections squeeze the `control` dim)
+        probe = mixed_grain_ds.assign(
+            relative_price=mixed_grain_ds["controls"].sel(control="price")
+            / mixed_grain_ds["controls"].sel(control="comp_price")
+        )
+        state = ft.fit(probe)
+        out = ft.transform(probe, state)
+        assert np.allclose(out["relative_price"].values, np.log(probe["relative_price"].values))
+
+    def test_mapping_scopes_to_named_variables(self, national_ds):
+        ft = Func({"target": "log"})
+        state = ft.fit(national_ds)
+        out = ft.transform(national_ds, state)
+        assert np.allclose(out["target"].values, np.log(national_ds["target"].values))
+        assert np.allclose(out["media"].values, national_ds["media"].values)
+
+    def test_inverse_pairs(self, national_ds):
+        for pair in (("log", "exp"), ("log1p", "expm1"), ("sqrt", "square")):
+            ft = Func({"target": pair[0]})
+            state = ft.fit(national_ds["target"])
+            positive = np.abs(national_ds["target"]) + 1.0
+            forward = ft.transform(positive, state)
+            back = ft.inverse_transform(forward, state)
+            assert np.allclose(back.values, positive.values), pair
+
+    def test_state_records_mapping_metadata(self, national_ds):
+        state = Func({"target": "log"}).fit(national_ds["target"])
+        assert state.attrs["kind"] == "function"
+        assert state.attrs["mapping"] == {"target": "log"}
+        assert len(state.data_vars) == 0
+
+    def test_xscalers_affine_refuses_non_affine_steps(self, mixed_grain_ds):
+        from xscalers.dispatch import PerVariable
+        from xscalers.pipeline import Pipeline
+
+        pipe = Pipeline(
+            [
+                # media_tv is abs-gamma-mental — strictly positive, log-safe
+                ("log", Func({"media_tv": "log"})),
+                ("scale", PerVariable({"media_tv": MeanScaler(dims=("date",))})),
+            ]
+        )
+        state = pipe.fit(mixed_grain_ds)
+        with pytest.raises(TypeError):
+            pipe.affine(state)
+
+    def test_spec_roundtrip(self, national_ds):
+        from xscalers.core import from_spec
+
+        original = Func({"target": "log1p"})
+        rebuilt = from_spec(original.to_spec())
+        state = original.fit(national_ds["target"].clip(min=0))
+        out = rebuilt.transform(xr.DataArray(national_ds["target"].clip(min=0), name="target"), state)
+        assert np.allclose(out.values, np.log1p(national_ds["target"].clip(min=0).values))

@@ -8,11 +8,73 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import xarray as xr
 
-from .core import BaseAffineTransformer, as_state, register
+from .core import BaseAffineTransformer, BaseTransformer, as_state, register
 
-__all__ = ["FixedScaler", "MeanScaler", "ZScore"]
+__all__ = ["FixedScaler", "Func", "MeanScaler", "ZScore"]
+
+# named elementwise ops; inverse pairs keep the whole chain invertible
+_FUNC_INVERSES: dict[str, str] = {
+    "log": "exp",
+    "log1p": "expm1",
+    "sqrt": "square",
+    "exp": "log",
+    "expm1": "log1p",
+    "square": "sqrt",
+}
+
+
+@register
+class Func(BaseTransformer):
+    """Named elementwise transform per variable — non-affine on purpose.
+
+    The second half of the "ratio, then log" chain: after a ``Derive`` step
+    produces a derived metric, apply a named unary function (e.g. ``log``) to
+    selected variables. Unmapped variables pass through unchanged.
+
+    Because it is not affine, ``Pipeline.affine()`` refuses pipelines that
+    contain it (by design): if the *target* is log-transformed, real-terms
+    contributions must go through ``inverse_transform`` — the batched path —
+    rather than the ``β·scale`` shortcut.
+    """
+
+    def __init__(self, mapping: dict[str, str]):
+        unknown = {op for op in mapping.values() if op not in _FUNC_INVERSES}
+        if unknown:
+            raise ValueError(
+                f"Unknown functions {sorted(unknown)}; known: {sorted(_FUNC_INVERSES)}"
+            )
+        self.mapping = dict(mapping)
+
+    def to_spec_kwargs(self) -> dict[str, Any]:
+        return {"mapping": dict(self.mapping)}
+
+    def compute(self, X: Any) -> xr.Dataset:
+        name = getattr(X, "name", None)
+        scaled_from = str(name) if name is not None else None
+        return as_state(
+            "function",
+            None,
+            scaled_from,
+            attrs={
+                "mapping": self.mapping,
+                "op": self.mapping.get(scaled_from) if scaled_from is not None else None,
+            },
+        )
+
+    def _transform(self, X: Any, state: Any) -> Any:
+        op = state.attrs.get("op")
+        if op is None:
+            return X
+        return getattr(np, op)(X)
+
+    def _inverse_transform(self, X: Any, state: Any) -> Any:
+        op = state.attrs.get("op")
+        if op is None:
+            return X
+        return getattr(np, _FUNC_INVERSES[op])(X)
 
 
 @register

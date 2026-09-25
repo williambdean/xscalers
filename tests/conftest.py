@@ -28,24 +28,13 @@ def national_ds(rng):
 
 
 @pytest.fixture
-def mixed_grain_ds(rng):
-    """Variables at different grains: national media, geo media, product controls."""
-    dates = np.arange(30)
-    return xr.Dataset(
-        {
-            "media_national": (("date", "media"), rng.normal(20, 2, (30, 2))),
-            "media_digital": (("date", "geo", "media"), rng.normal(80, 4, (30, 2, 2))),
-            "media_tv": (("date", "media"), rng.normal(1_000, 100, (30, 2))),
-            "controls_nat": (("date",), rng.normal(0, 1, 30)),
-            "controls_prod": (("date", "product"), rng.normal(0, 1, (30, 4))),
-        },
-        coords={
-            "date": dates,
-            "media": ["tv", "ooh"],
-            "geo": ["us", "eu"],
-            "product": ["p1", "p2", "p3", "p4"],
-        },
-    )
+def mixed_grain_ds():
+    """Variables at different grains: national media, geo media, product
+    controls (+ a controls variable whose `control` coordinate holds
+    price/comp_price, the derived-metrics shape)."""
+    from xscalers.datasets import load_mixed_grain
+
+    return load_mixed_grain()
 
 
 @pytest.fixture

@@ -25,16 +25,18 @@ from .datasets import load_media_channels, load_mixed_grain, load_national
 from .dispatch import PerVariable
 from .persistence import append_state
 from .pipeline import BoundStep, Pipeline, make_pipeline
-from .scalers import FixedScaler, MeanScaler, ZScore
+from .scalers import FixedScaler, Func, MeanScaler, ZScore
 from .serialize import from_spec, to_spec
-from .shape import Selector, Splitter
+from .shape import Derive, Selector, Splitter
 
 __all__ = [
     "REGISTRY",
     "BaseAffineTransformer",
     "BaseTransformer",
     "BoundStep",
+    "Derive",
     "FixedScaler",
+    "Func",
     "MeanScaler",
     "NonInvertibleError",
     "PerVariable",

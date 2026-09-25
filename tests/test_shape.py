@@ -5,11 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from xscalers import scalers
-from xscalers.core import NonInvertibleError
+from xscalers.core import NonInvertibleError, from_spec
 from xscalers.dispatch import PerVariable
 from xscalers.pipeline import Pipeline
-from xscalers.shape import Selector, Splitter
+from xscalers.scalers import FixedScaler, Func, MeanScaler, ZScore
+from xscalers.shape import Derive, Selector, Splitter
 
 DIGITAL = ["search", "social", "fb"]
 TV = ["tv", "stream"]
@@ -30,8 +30,8 @@ def _pipe():
                 "scale",
                 PerVariable(
                     {
-                        "digital": scalers.MeanScaler(dims=("date",)),
-                        "tv": scalers.FixedScaler(scale=1_000),
+                        "digital": MeanScaler(dims=("date",)),
+                        "tv": FixedScaler(scale=1_000),
                     }
                 ),
             ),
@@ -93,3 +93,174 @@ class TestSelector:
         state = selector.fit(split_tree)
         with pytest.raises(NonInvertibleError):
             selector.inverse_transform(split_tree, state)
+
+
+class TestDerive:
+    """Derived metrics from coordinate values within one variable."""
+
+    def _deriver(self):
+        return Derive(
+            name="relative_price",
+            numerator=("controls", {"control": "price"}),
+            denominator=("controls", {"control": "comp_price"}),
+            op="ratio",
+        )
+
+    def test_ratio_value_parity(self, mixed_grain_ds):
+        ds = mixed_grain_ds
+        state = self._deriver().fit(ds)
+        derived = self._deriver().transform(ds, state)
+        expected = ds["controls"].sel(control="price") / ds["controls"].sel(control="comp_price")
+        assert "relative_price" in derived.data_vars
+        assert derived["relative_price"].dims == ("date", "product")
+        assert np.allclose(derived["relative_price"].values, expected.values)
+
+    def test_reduce_over_a_piece(self, mixed_grain_ds):
+        """List selectors + reduce: sum over the piece (share-of-voice shape)."""
+        ds = mixed_grain_ds
+        near = Derive(
+            name="price_share",
+            numerator=("controls", {"control": ["price", "comp_price"]}),
+            denominator=("controls", {"control": "comp_price"}),
+            op="ratio",
+            reduce="sum",
+        )
+        state = near.fit(ds)
+        out = near.transform(ds, state)
+        expected = ds["controls"].sel(control=["price", "comp_price"]).sum(
+            "control"
+        ) / ds["controls"].sel(control="comp_price")
+        assert out["price_share"].dims == ("date", "product")
+        assert np.allclose(out["price_share"].values, expected.values)
+
+    def test_scalar_coordinate_selection(self, mixed_grain_ds):
+        ds = mixed_grain_ds
+        derive = Derive(
+            name="price_only",
+            numerator=("controls", {"control": "price"}),
+            denominator=("controls", {"control": "comp_price"}),
+            op="ratio",
+        )
+        state = derive.fit(ds)
+        out = derive.transform(ds, state)
+        assert out["price_only"].dims == ("date", "product")
+        manual = ds["controls"].sel(control="price") / ds["controls"].sel(control="comp_price")
+        assert np.allclose(out["price_only"].values, manual.values)
+
+    def test_state_records_recipe_metadata_only(self, mixed_grain_ds):
+        state = self._deriver().fit(mixed_grain_ds)
+        assert state.attrs["kind"] == "derive"
+        assert state.attrs["derived"] == "relative_price"
+        assert state.attrs["reduce"] is None
+        assert len(state.data_vars) == 0
+
+    def test_inverse_drops_the_derived_variable_only(self, mixed_grain_ds):
+        ds = mixed_grain_ds
+        derive = self._deriver()
+        state = derive.fit(ds)
+        out = derive.transform(ds, state)
+        back = derive.inverse_transform(out, state)
+        assert "relative_price" not in back.data_vars
+        for var in ds.data_vars:
+            assert np.allclose(back[var].values, ds[var].values)
+
+    def test_spec_roundtrip(self, mixed_grain_ds):
+        original = self._deriver()
+        rebuilt = from_spec(original.to_spec())
+        state = original.fit(mixed_grain_ds)
+        back = rebuilt.transform(mixed_grain_ds, state)
+        expected = mixed_grain_ds["controls"].sel(control="price") / mixed_grain_ds["controls"].sel(
+            control="comp_price"
+        )
+        assert np.allclose(back["relative_price"].values, expected.values)
+
+    def test_pipeline_derive_then_scale_roundtrip(self, mixed_grain_ds):
+        pipe = Pipeline(
+            [
+                ("derive", self._deriver()),
+                ("scale", PerVariable({"relative_price": ZScore(dims=("date",))})),
+            ]
+        )
+        state = pipe.fit(mixed_grain_ds)
+        scaled = pipe.transform(mixed_grain_ds, state)
+        manual = mixed_grain_ds["controls"].sel(control="price") / mixed_grain_ds["controls"].sel(
+            control="comp_price"
+        )
+        manual_scaled = (
+            manual - manual.mean("date")
+        ) / manual.std("date", ddof=0)
+        assert np.allclose(scaled["relative_price"].values, manual_scaled.values)
+        back = pipe.inverse_transform(scaled, state)
+        for var in mixed_grain_ds.data_vars:
+            assert np.allclose(back[var].values, mixed_grain_ds[var].values)
+        assert "relative_price" not in back.data_vars
+
+class TestDeriveDogfood:
+    """Two log-ratio derivations from the (date, product, control) controls:
+    log(price / comp_price) and log(price / inflation), then z-scored."""
+
+    def _pipe(self):
+        return Pipeline(
+            [
+                (
+                    "derive_price_comp",
+                    Derive(
+                        name="price_rel_comp",
+                        numerator=("controls", {"control": "price"}),
+                        denominator=("controls", {"control": "comp_price"}),
+                        op="ratio",
+                    ),
+                ),
+                (
+                    "derive_price_infl",
+                    Derive(
+                        name="price_rel_infl",
+                        numerator=("controls", {"control": "price"}),
+                        denominator=("controls", {"control": "inflation"}),
+                        op="ratio",
+                    ),
+                ),
+                ("log", Func({"price_rel_comp": "log", "price_rel_infl": "log"})),
+                (
+                    "scale",
+                    PerVariable(
+                        {
+                            "price_rel_comp": ZScore(dims=("date",)),
+                            "price_rel_infl": ZScore(dims=("date",)),
+                        }
+                    ),
+                ),
+            ]
+        )
+
+    def test_two_log_ratios_in_one_pipeline(self, mixed_grain_ds):
+        pipe = self._pipe()
+        state = pipe.fit(mixed_grain_ds)
+        scaled = pipe.transform(mixed_grain_ds, state)
+
+        controls = mixed_grain_ds["controls"]
+        for name, denom in (("price_rel_comp", "comp_price"), ("price_rel_infl", "inflation")):
+            expected = np.log(controls.sel(control="price") / controls.sel(control=denom))
+            expected_z = (expected - expected.mean("date")) / expected.std("date", ddof=0)
+            assert scaled[name].dims == ("date", "product")
+            assert np.allclose(scaled[name].values, expected_z.values)
+            # z-score sanity: mean ~0, std ~1 over both kept dims
+            assert np.allclose(scaled[name].mean(("date", "product")).values, 0.0, atol=1e-8)
+            assert np.allclose(
+                scaled[name].std(("date", "product"), ddof=0).values, 1.0, rtol=1e-6
+            )
+
+    def test_reverse_chain_recovers_inputs(self, mixed_grain_ds):
+        pipe = self._pipe()
+        state = pipe.fit(mixed_grain_ds)
+        back = pipe.inverse_transform(pipe.transform(mixed_grain_ds, state), state)
+        for var in mixed_grain_ds.data_vars:
+            assert np.allclose(back[var].values, mixed_grain_ds[var].values)
+        for name in ("price_rel_comp", "price_rel_infl"):
+            assert name not in back.data_vars
+
+    def test_affine_refuses_the_log_chain(self, mixed_grain_ds):
+        pipe = self._pipe()
+        state = pipe.fit(mixed_grain_ds)
+        with pytest.raises(TypeError):
+            pipe.affine(state)

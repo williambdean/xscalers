@@ -61,6 +61,50 @@ state = dispatch.fit(mixed)              # one Dataset state per variable
 scaled = dispatch.transform(mixed, state)  # each var scaled by its own recipe
 ```
 
+## Derived metrics — ratios of coordinate values (then logs, etc.)
+
+Take a ratio of two *coordinate values* inside one variable — here
+`price / comp_price` within `controls (date, product, control)` — as a new
+variable in the pipeline, then transform/scale it like anything else:
+
+```python
+from xscalers import Pipeline, Func, Splitter, ZScore
+from xscalers.dispatch import PerVariable
+from xscalers.datasets import load_mixed_grain
+from xscalers.shape import Derive
+
+mixed = load_mixed_grain()
+mixed["controls"]                     # coords: control = [price, comp_price]
+
+pipe = Pipeline(
+    [
+        (
+            "derive",
+            Derive(
+                name="relative_price",
+                numerator=("controls", {"control": "price"}),
+                denominator=("controls", {"control": "comp_price"}),
+                op="ratio",
+            ),
+        ),
+        ("log", Func({"relative_price": "log"})),       # named funcs; log1p for zeros
+        ("scale", PerVariable({"relative_price": ZScore(dims=("date",))})),
+    ]
+)
+state = pipe.fit(mixed)
+scaled = pipe.transform(mixed, state)
+
+back = pipe.inverse_transform(scaled, state)
+import numpy as np
+np.testing.assert_allclose(back["controls"], mixed["controls"])
+```
+
+`inverse_transform` drops the derived variable and restores the inputs — so
+the whole chain (derive → log → z-score — unzscore → exp — un-derive)
+round-trips. Note that a log makes the target path non-affine: `pipe.affine()`
+will refuse such pipelines, and real-terms contributions must go through the
+batched `inverse_transform` instead of the `(β, scale)` shortcut.
+
 ## Splitting one variable into differently-treated pieces
 
 Different treatment *within* one media variable (digital vs TV) works by

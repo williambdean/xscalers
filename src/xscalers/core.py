@@ -136,9 +136,6 @@ class BaseTransformer(ABC):
         """True for non-Dataset inputs, which compute/transform handle directly."""
         return not isinstance(X, xr.Dataset)
 
-    def affine_view(self, state: Mapping[str, Any]) -> Mapping[str, Any]:
-        return state
-
     def to_spec(self) -> dict[str, Any]:
         from .serialize import spec_of
 

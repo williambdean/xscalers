@@ -32,7 +32,7 @@ class TestSpecRegistry:
     def test_all_scalers_registered(self):
         from xscalers.core import REGISTRY
 
-        for cls in (scalers.FixedScaler, scalers.ZScore, scalers.MeanScaler):
+        for cls in (scalers.FixedScaler, scalers.ZScore, scalers.MeanScaler, scalers.Func):
             assert cls.__name__ in REGISTRY
 
 

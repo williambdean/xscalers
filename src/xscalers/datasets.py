@@ -48,7 +48,12 @@ def load_national() -> xr.Dataset:
 
 
 def load_mixed_grain() -> xr.Dataset:
-    """Variables at different grains for per-variable dispatch examples."""
+    """Variables at different grains for per-variable dispatch examples.
+
+    Includes a ``controls (date, product, control)`` variable whose
+    ``control`` coordinate holds ``[price, comp_price]`` — the shape for
+    derived-metric examples (e.g. the price/competitor-price ratio).
+    """
     rng = np.random.default_rng(31)
     return xr.Dataset(
         {
@@ -63,12 +68,17 @@ def load_mixed_grain() -> xr.Dataset:
             "media_tv": (("date", "media"), np.abs(rng.gamma(2.0, 900.0, size=(104, 2)))),
             "controls_nat": (("date",), rng.normal(0, 1, 104)),
             "controls_prod": (("date", "product"), rng.normal(0, 1, (104, 4))),
+            "controls": (
+                ("date", "product", "control"),
+                np.abs(rng.gamma(2.0, 3.0, size=(104, 4, 3))),
+            ),
         },
         coords={
             "date": _dates(104),
             "media": ["tv", "ooh"],
             "geo": ["us", "eu"],
             "product": ["p1", "p2", "p3", "p4"],
+            "control": ["price", "comp_price", "inflation"],
         },
     )
 
