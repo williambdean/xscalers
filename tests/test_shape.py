@@ -151,7 +151,7 @@ class TestDerive:
         state = self._deriver().fit(mixed_grain_ds)
         assert state.attrs["kind"] == "derive"
         assert state.attrs["derived"] == "relative_price"
-        assert state.attrs["reduce"] is None
+        assert state.attrs["reduce"] == ""  # None → "" for netCDF-safety
         assert len(state.data_vars) == 0
 
     def test_inverse_drops_the_derived_variable_only(self, mixed_grain_ds):

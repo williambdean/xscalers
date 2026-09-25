@@ -191,10 +191,10 @@ class TestFunctionTransformer:
             back = ft.inverse_transform(forward, state)
             assert np.allclose(back.values, positive.values), pair
 
-    def test_state_records_mapping_metadata(self, national_ds):
+    def test_state_records_op_metadata(self, national_ds):
         state = Func({"target": "log"}).fit(national_ds["target"])
         assert state.attrs["kind"] == "function"
-        assert state.attrs["mapping"] == {"target": "log"}
+        assert state.attrs["op"] == "log"  # mapping stays on the spec, not the artifact
         assert len(state.data_vars) == 0
 
     def test_xscalers_affine_refuses_non_affine_steps(self, mixed_grain_ds):

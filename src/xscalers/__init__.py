@@ -24,7 +24,7 @@ from .core import (
 from .datasets import load_media_channels, load_mixed_grain, load_national
 from .dispatch import PerVariable
 from .persistence import append_state
-from .pipeline import BoundStep, Pipeline, make_pipeline
+from .pipeline import BoundStep, Pipeline, Union, make_pipeline, make_union
 from .scalers import FixedScaler, Func, MeanScaler, ZScore
 from .serialize import from_spec, to_spec
 from .shape import Derive, Selector, Splitter
@@ -43,6 +43,7 @@ __all__ = [
     "Pipeline",
     "Selector",
     "Splitter",
+    "Union",
     "ZScore",
     "affine_pair",
     "append_state",
@@ -55,6 +56,7 @@ __all__ = [
     "load_mixed_grain",
     "load_national",
     "make_pipeline",
+    "make_union",
     "reassemble",
     "register",
     "state_tree",

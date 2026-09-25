@@ -83,7 +83,8 @@ def as_state(
             # None-dims (reduce over everything) persists as "__all__" for
             # JSON/netCDF-safety; from state construction it's re-readable
             "dims": list(dims) if dims is not None else "__all__",
-            "scaled_from": scaled_from,
+            # None-scaled_from (e.g. shape steps like Derive) → "" for netCDF
+            "scaled_from": scaled_from or "",
         }
     )
     if attrs:

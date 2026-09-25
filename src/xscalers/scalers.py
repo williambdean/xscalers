@@ -53,26 +53,28 @@ class Func(BaseTransformer):
 
     def compute(self, X: Any) -> xr.Dataset:
         name = getattr(X, "name", None)
-        scaled_from = str(name) if name is not None else None
+        scaled_from = str(name) if name is not None else ""
+        # the mapping lives on the *recipe*; each per-variable state carries
+        # only the scalar op decision for that variable (netCDF-safe)
         return as_state(
             "function",
             None,
             scaled_from,
             attrs={
-                "mapping": self.mapping,
-                "op": self.mapping.get(scaled_from) if scaled_from is not None else None,
+                # None → "" for netCDF-safety (scalar string attrs only)
+                "op": self.mapping.get(scaled_from, ""),
             },
         )
 
     def _transform(self, X: Any, state: Any) -> Any:
-        op = state.attrs.get("op")
-        if op is None:
+        op = state.attrs.get("op", "")
+        if not op:
             return X
         return getattr(np, op)(X)
 
     def _inverse_transform(self, X: Any, state: Any) -> Any:
-        op = state.attrs.get("op")
-        if op is None:
+        op = state.attrs.get("op", "")
+        if not op:
             return X
         return getattr(np, _FUNC_INVERSES[op])(X)
 

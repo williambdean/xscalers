@@ -300,7 +300,7 @@ class Derive:
             attrs={
                 "derived": self.name,
                 "op": self.op,
-                "reduce": self.reduce,
+                "reduce": self.reduce or "" ,
             },
         )
 

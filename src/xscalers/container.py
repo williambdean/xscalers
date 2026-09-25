@@ -15,7 +15,7 @@ from typing import Any
 
 import xarray as xr
 
-__all__ = ["flatten", "reassemble", "state_tree"]
+__all__ = ["flatten", "reassemble", "state_from_tree", "state_tree"]
 
 
 def _node_path_parts(node: xr.DataTree) -> list[str]:
@@ -99,17 +99,42 @@ def _groups_from_keys(
 def state_tree(states: Mapping[str, Any]) -> xr.DataTree:
     """Nest fitted states into a DataTree: child per step, leaf per variable.
 
-    ``states`` is a mapping step name → Dataset or mapping-of-Datasets
-    (per-variable states, whose keys may be nested node paths). This is what
-    makes whole-pipeline state a single netCDF artifact.
+    ``states`` is a mapping step name → Dataset, or → another mapping
+    (composite states recurse, e.g. a Union's per-branch pipeline states).
+    This is what makes whole-pipeline state a single netCDF artifact.
     """
     groups: dict[str, xr.Dataset] = {}
-    for step, state in states.items():
-        if isinstance(state, xr.Dataset):
-            groups[step] = state
-        elif isinstance(state, Mapping):
-            for key, ds in state.items():
-                groups[f"{step}/{key}"] = ds
+
+    def _walk(prefix: str, mapping: Mapping[str, Any]) -> None:
+        for name, value in mapping.items():
+            path = "/".join(filter(None, (prefix, name)))
+            if isinstance(value, xr.Dataset):
+                groups[path] = value
+            elif isinstance(value, Mapping):
+                _walk(path, value)
+            else:
+                raise TypeError(
+                    f"Cannot place state at {path!r}: {type(value).__name__}"
+                )
+
+    _walk("", states)
     root = xr.Dataset()
     paths = {f"/{k}": v for k, v in groups.items()}
     return xr.DataTree.from_dict({"": root, **paths})
+
+
+def state_from_tree(tree: xr.DataTree) -> dict[str, Any]:
+    """Invert ``state_tree``: a DataTree → nested mapping with Dataset leaves."""
+    out: dict[str, Any] = {}
+    for node in tree.subtree:
+        # attr-only Datasets count too (e.g. shape-step states) — only
+        # fully-empty root/intermediates are skipped
+        meaningful = bool(list(node.dataset.data_vars)) or bool(node.dataset.attrs)
+        if not meaningful or node.path == "/":
+            continue
+        parts = [p for p in node.path.split("/") if p]
+        branch = out
+        for part in parts[:-1]:
+            branch = branch.setdefault(part, {})
+        branch[parts[-1]] = node.dataset
+    return out
