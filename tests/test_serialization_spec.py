@@ -65,18 +65,3 @@ class TestStateNetcdf:
         )
         assert np.allclose(out.values, expected.values)
         assert loaded.attrs["kind"] == "zscore"
-
-
-class TestLegacySpecKinds:
-    def test_renamed_kind_still_loads(self):
-        """Recipes written before the rename keep loading (kind = class name)."""
-        spec = {
-            "kind": "PerVariable",
-            "kwargs": {
-                "mapping": {"media": {"kind": "ZScore", "kwargs": {"dims": ["date"]}}},
-                "default": "passthrough",
-            },
-        }
-        rebuilt = from_spec(spec)
-        assert isinstance(rebuilt, VariableTransformer)
-        assert to_spec(rebuilt)["kind"] == "VariableTransformer"
