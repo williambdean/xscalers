@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pathlib
+import re
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -49,7 +52,6 @@ class TestReadmeExecutes:
     @pytest.fixture
     def readme_blocks(self):
         import pathlib
-        import re
 
         readme = (pathlib.Path(__file__).parent.parent / "README.md").read_text()
         return re.findall(r"```python\n(.*?)```", readme, re.DOTALL)
@@ -71,3 +73,46 @@ class TestReadmeExecutes:
                 if importlib.util.find_spec(module) is None:
                     continue  # documented optional dependency; not installed here
             exec(compile(block, "<readme>", "exec"), ns)
+
+
+class TestReadmeTypecheck:
+    """Self-contained README python blocks type-check under mypy.
+
+    Illustrates the README stays honest: annotations resolve, dataset state
+    types are real, and the public surface is importable as typed. (# FIT)
+    """
+
+    @pytest.fixture
+    def typed_groups(self) -> list[str]:
+
+        readme = (pathlib.Path(__file__).parent.parent / "README.md").read_text()
+        blocks = re.findall(r"```python\n(.*?)```", readme, re.DOTALL)
+        grouped: list[str] = []
+        buffer = ""
+        for block in blocks:
+            if block.strip().startswith("# requires-"):
+                continue
+            if "# continues above" in block and buffer:
+                buffer += "\n\n" + block
+                continue
+            if buffer:
+                grouped.append(buffer)
+            buffer = block
+        if buffer:
+            grouped.append(buffer)
+        return grouped
+
+    def test_selfcontained_blocks_typecheck(self, typed_groups, tmp_path):
+        import subprocess
+
+        for i, block in enumerate(typed_groups):
+            path = tmp_path / f"readme_block_{i}.py"
+            path.write_text(block)
+            result = subprocess.run(
+                ["uv", "run", "mypy", str(path)],
+                capture_output=True,
+                text=True,
+                check=False,  # exit code carries the diagnostics; asserts read stdout
+            )
+            errors = [l for l in result.stdout.splitlines() if "error" in l]
+            assert not errors, f"README block group {i} does not type-check:\n" + "\n".join(errors)

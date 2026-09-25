@@ -104,10 +104,14 @@ class BaseTransformer(ABC):
     def compute(self, X: Any) -> xr.Dataset:
         """Data-derived fitted state."""
 
-    def _transform(self, X: Any, state: Mapping[str, xr.DataArray]) -> Any:
+    def _transform(
+        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
+    ) -> Any:
         raise NotImplementedError
 
-    def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray]) -> Any:
+    def _inverse_transform(
+        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
+    ) -> Any:
         raise NotImplementedError
 
     def fit(self, X: Any) -> Any:
@@ -118,14 +122,18 @@ class BaseTransformer(ABC):
             return self.compute(X)
         return PerVariable(default=self).fit(X)
 
-    def transform(self, X: Any, state: Mapping[str, xr.DataArray]) -> Any:
+    def transform(
+        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
+    ) -> Any:
         from .dispatch import PerVariable
 
         if self.__scalarish(X):
             return self._transform(X, state)
         return PerVariable(default=self).transform(X, state)
 
-    def inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray]) -> Any:
+    def inverse_transform(
+        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
+    ) -> Any:
         from .dispatch import PerVariable
 
         if self.__scalarish(X):
@@ -163,13 +171,17 @@ def _all_dims(X: Any, data_dims: tuple[str, ...] | None) -> tuple[str, ...]:
 class BaseAffineTransformer(BaseTransformer):
     """Scalers whose transform is the affine pair: y = (x - center) / scale."""
 
-    def _transform(self, X: Any, state: Mapping[str, xr.DataArray]) -> Any:
+    def _transform(
+        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
+    ) -> Any:
         from .binding import lift_state_if_symbolic
 
         state = lift_state_if_symbolic(X, state)
         return (X - state["center"]) / state["scale"]
 
-    def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray]) -> Any:
+    def _inverse_transform(
+        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
+    ) -> Any:
         from .binding import lift_state_if_symbolic
 
         state = lift_state_if_symbolic(X, state)

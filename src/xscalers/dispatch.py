@@ -13,6 +13,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+import xarray as xr
+
 from .container import flatten, reassemble
 from .core import register
 
@@ -93,7 +95,7 @@ class PerVariable:
                 stacklevel=3,
             )
 
-    def transform(self, X: Any, state: Mapping[str, Any]) -> Any:
+    def transform(self, X: Any, state: Mapping[str, Any] | xr.Dataset) -> Any:
         out: dict[str, Any] = {}
         for key, da in flatten(X).items():
             scaler = self._scaler_for(key)
@@ -106,7 +108,7 @@ class PerVariable:
                 out[key] = scaler.transform(da, st)
         return reassemble(X, out)
 
-    def inverse_transform(self, X: Any, state: Mapping[str, Any]) -> Any:
+    def inverse_transform(self, X: Any, state: Mapping[str, Any] | xr.Dataset) -> Any:
         out: dict[str, Any] = {}
         for key, da in flatten(X).items():
             scaler = self._scaler_for(key)

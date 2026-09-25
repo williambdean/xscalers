@@ -16,6 +16,8 @@ back is native: ``xr.open_datatree(store, group="scalers")``.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import xarray as xr
 
 __all__ = ["append_state"]
@@ -23,9 +25,9 @@ __all__ = ["append_state"]
 
 def append_state(
     state: xr.Dataset | xr.DataTree,
-    store: str,
+    store: str | Path,
     group: str = "scalers",
-) -> str:
+) -> str | Path:
     """Append a fitted state into an existing zarr store under ``group``.
 
     A bare Dataset is written directly under ``group``; a DataTree nests one

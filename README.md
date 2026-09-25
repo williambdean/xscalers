@@ -27,11 +27,13 @@ work with no special casing.
 ## The basics
 
 ```python
+import xarray as xr
+
 from xscalers import MeanScaler, load_national, load_mixed_grain
 
-national = load_national()
+national: xr.Dataset = load_national()
 
-state = MeanScaler(dims=("date",)).fit(national["media"])
+state: xr.Dataset = MeanScaler(dims=("date",)).fit(national["media"])
 state         # {"center": 0.0, "scale": per-channel mean over date}
 
 scaled = MeanScaler(dims=("date",)).transform(national["media"], state)
@@ -45,10 +47,12 @@ Mixed grains need no special casing: `fit` a Dataset and each variable gets
 its own state:
 
 ```python
+import xarray as xr
+
 from xscalers import FixedScaler, MeanScaler, ZScore, load_mixed_grain
 from xscalers.dispatch import PerVariable
 
-mixed = load_mixed_grain()
+mixed: xr.Dataset = load_mixed_grain()
 dispatch = PerVariable(
     {
         "media_national": MeanScaler(dims=("date",)),
@@ -68,12 +72,14 @@ Take a ratio of two *coordinate values* inside one variable — here
 variable in the pipeline, then transform/scale it like anything else:
 
 ```python
+import xarray as xr
+
 from xscalers import Pipeline, Func, Splitter, ZScore
 from xscalers.dispatch import PerVariable
 from xscalers.datasets import load_mixed_grain
 from xscalers.shape import Derive
 
-mixed = load_mixed_grain()
+mixed: xr.Dataset = load_mixed_grain()
 mixed["controls"]                     # coords: control = [price, comp_price]
 
 pipe = Pipeline(
@@ -166,7 +172,7 @@ import numpy as np
 from xscalers import MeanScaler
 from xscalers.datasets import load_national
 
-national = load_national()
+national: xr.Dataset = load_national()
 scaler = MeanScaler(dims=("date",))
 state = scaler.fit(national["media"])
 
@@ -184,15 +190,16 @@ of the existing store; `append_state` exists only because
 native:
 
 ```python
+# continues above — `xr`, `mixed` and the fitted `dispatch` carry over
 from pathlib import Path
-from xscalers import append_state
+from xscalers import MeanScaler, PerVariable, append_state, load_mixed_grain
 from xscalers.container import state_tree
 
-store = Path("mmm.zarr")                     # your existing input store
-mixed = load_mixed_grain()                   # pretend it already lives there
+store: Path = Path("mmm.zarr")               # your existing input store
+mixed: xr.Dataset = load_mixed_grain()       # pretend it already lives there
 mixed.to_zarr(store)                         # ... here we create it first
 
-dispatch = PerVariable({"media_national": MeanScaler(dims=("date",))}, default="drop")
+dispatch: PerVariable = PerVariable({"media_national": MeanScaler(dims=("date",))}, default="drop")
 state = dispatch.fit(mixed)
 append_state(state_tree({"scale": state}), store, group="scalers")
 
@@ -235,11 +242,10 @@ state.to_netcdf("scaler_state.nc")                # ...and its scaling, side by 
 idata_back = xr.open_datatree("posterior.nc")     # DataTree in, DataTree out
 state_back = xr.open_dataset("scaler_state.nc")
 
-# real-terms conversion needs BOTH parts of the affine pair (center, scale)
-posterior_beta = float(idata_back["prior"]["beta"].mean())
-contribution_scaled = posterior_beta * float(np.asarray(y).mean())
-contribution_real = contribution_scaled * float(state_back["scale"]) + float(state_back["center"])
-contributions_original_scale = contribution_real
+# real-terms conversion needs BOTH parts of the affine pair (center, scale):
+posterior_beta: float = float(idata_back["prior"]["beta"].mean())
+contribution_scaled: float = posterior_beta * float(np.asarray(y).mean())
+contributions_original_scale = contribution_scaled * float(state_back["scale"]) + float(state_back["center"])
 import os
 for name in ("posterior.nc", "scaler_state.nc"):
     os.remove(name)
@@ -248,6 +254,7 @@ for name in ("posterior.nc", "scaler_state.nc"):
 The fitted pipeline serializes as *recipe + artifact*:
 
 ```python
+# continues above — `state` carries over
 import os
 from xscalers.container import state_tree
 
@@ -266,6 +273,7 @@ silently wrong:
 
 ```python
 import numpy as np
+import xarray as xr
 from xscalers import Func, FixedScaler, ZScore, load_mixed_grain
 from xscalers.dispatch import PerVariable
 from xscalers.pipeline import Pipeline
