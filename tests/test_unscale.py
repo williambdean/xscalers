@@ -7,13 +7,13 @@ import pytest
 import xarray as xr
 
 from xscalers import Func, MeanScaler, ZScore
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.pipeline import Pipeline
 
 
 def _national_pipeline():
     return Pipeline(
-        [("scale", PerVariable({"target": ZScore(dims=("date",)), "media": MeanScaler(dims=("date",))}))],
+        [("scale", VariableTransformer({"target": ZScore(dims=("date",)), "media": MeanScaler(dims=("date",))}))],
     )
 
 
@@ -74,7 +74,7 @@ class TestUnscaleNonAffineFallback:
                     ),
                 ),
                 ("log", Func({"level_rel_reference": "log"})),
-                ("scale", PerVariable({"level_rel_reference": FixedScaler(scale=1.0)})),
+                ("scale", VariableTransformer({"level_rel_reference": FixedScaler(scale=1.0)})),
             ]
         )
         pipe.fit(mixed_grain_ds)

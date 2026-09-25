@@ -385,7 +385,7 @@ def make_union(*branches: Any, collisions: str = "require_equal") -> Union:
 
 def _step_owns(step: Any, step_state: Any, var: str) -> bool:
     """Does this step transform ``var`` (i.e. would its inverse participate)?"""
-    # PerVariable/dispatch: the per-variable mapping owns vars whose key exists
+    # VariableTransformer/dispatch: the per-variable mapping owns vars whose key exists
     if isinstance(step_state, Mapping) and var in step_state:
         return True
     # dataset-level per-variable states nest one further level

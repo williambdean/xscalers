@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.core import NonInvertibleError, from_spec
 from xscalers.pipeline import Pipeline
 from xscalers.preprocessing import Derive, FixedScaler, Func, MeanScaler, Selector, Splitter, ZScore
@@ -28,7 +28,7 @@ def _pipe():
             ("split", _splitter()),
             (
                 "scale",
-                PerVariable(
+                VariableTransformer(
                     {
                         "digital": MeanScaler(dims=("date",)),
                         "tv": FixedScaler(scale=1_000),
@@ -178,7 +178,7 @@ class TestDerive:
         pipe = Pipeline(
             [
                 ("derive", self._deriver()),
-                ("scale", PerVariable({"level_ratio": ZScore(dims=("date",))})),
+                ("scale", VariableTransformer({"level_ratio": ZScore(dims=("date",))})),
             ]
         )
         state = pipe.fit(mixed_grain_ds)
@@ -223,7 +223,7 @@ class TestDeriveDogfood:
                 ("log", Func({"level_vs_reference": "log", "level_vs_seasonality": "log"})),
                 (
                     "scale",
-                    PerVariable(
+                    VariableTransformer(
                         {
                             "level_vs_reference": ZScore(dims=("date",)),
                             "level_vs_seasonality": ZScore(dims=("date",)),

@@ -15,9 +15,9 @@ import xarray as xr
 from xscalers import (
     FixedScaler,
     MeanScaler,
-    PerVariable,
     Pipeline,
     Splitter,
+    VariableTransformer,
     append_state,
     load_media_channels,
     load_mixed_grain,
@@ -49,13 +49,13 @@ class TestZarrAppend:
         store = tmp_path / "mmm.zarr"
         ds.to_zarr(store)  # the "larger MMM input" store existing first
 
-        pipe = Pipeline([("scale", PerVariable({"target": MeanScaler(dims=("date",))}))])
+        pipe = Pipeline([("scale", VariableTransformer({"target": MeanScaler(dims=("date",))}))])
         state = pipe.fit(ds)
         append_state(pipe.to_state_tree(state), store, group="scalers")
 
         tree = xr.open_datatree(store, group="scalers")
         reloaded_state = tree.children["scale"].children["target"].dataset
-        out = PerVariable({"target": MeanScaler(dims=("date",))}).transform(
+        out = VariableTransformer({"target": MeanScaler(dims=("date",))}).transform(
             ds, {"target": reloaded_state}
         )
         assert np.allclose(out["target"].values, (ds["target"] / ds["target"].mean()).values)
@@ -81,7 +81,7 @@ class TestZarrAppend:
         store = tmp_path / "refit.zarr"
         ds.to_zarr(store)
 
-        pipe = Pipeline([("scale", PerVariable({"target": MeanScaler(dims=("date",))}))])
+        pipe = Pipeline([("scale", VariableTransformer({"target": MeanScaler(dims=("date",))}))])
         state = pipe.fit(ds)
         append_state(pipe.to_state_tree(state), store, group="scalers")
         append_state(pipe.to_state_tree(state), store, group="scalers")  # re-fit override
@@ -94,15 +94,15 @@ class TestZarrAppend:
         store = tmp_path / "mixed.zarr"
         mixed.to_zarr(store)
 
-        dispatch = PerVariable(
+        vt = VariableTransformer(
             {
                 "media_national": MeanScaler(dims=("date",)),
                 "media_digital": MeanScaler(dims=("date",)),
             },
             default="drop",
         )
-        state = dispatch.fit(mixed)
-        # PerVariable states are per-variable dicts; state_tree nests them
+        state = vt.fit(mixed)
+        # VariableTransformer states are per-variable dicts; state_tree nests them
         # under their step name for persistence
         append_state(state_tree({"scale": state}), store, group="scalers")
 
@@ -113,7 +113,7 @@ class TestZarrAppend:
             name: node.dataset
             for name, node in tree.children["scale"].children.items()
         }
-        out = dispatch.transform(mixed, reloaded)
+        out = vt.transform(mixed, reloaded)
         nat = mixed["media_national"]
         assert np.allclose(out["media_national"].values, (nat / nat.mean("date")).values)
 
@@ -161,7 +161,7 @@ class TestSplitDataset:
                 ),
                 (
                     "scale",
-                    PerVariable(
+                    VariableTransformer(
                         {
                             "media_digital": MeanScaler(dims=("date",)),
                             "media_linear": FixedScaler(scale=1_000),

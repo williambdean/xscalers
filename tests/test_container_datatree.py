@@ -43,22 +43,22 @@ class TestUnflatten:
 
 class TestStateTree:
     def test_state_tree_builds_nesting_from_compound_keys(self, split_tree):
-        from xscalers.compose import PerVariable
+        from xscalers.compose import VariableTransformer
 
-        dispatch = PerVariable(
+        vt = VariableTransformer(
             {"media": preprocessing.FixedScaler(scale=100.0), "controls": preprocessing.ZScore(dims=("date",))}
         )
-        state = dispatch.fit(split_tree)
+        state = vt.fit(split_tree)
         tree = state_tree(state)
         assert "scale" in tree.children["media"].dataset
 
     def test_state_tree_netcdf_roundtrip(self, split_tree, tmp_path):
-        from xscalers.compose import PerVariable
+        from xscalers.compose import VariableTransformer
 
-        dispatch = PerVariable(
+        vt = VariableTransformer(
             {"media": preprocessing.FixedScaler(scale=100.0), "controls": preprocessing.ZScore(dims=("date",))}
         )
-        state = dispatch.fit(split_tree)
+        state = vt.fit(split_tree)
         path = tmp_path / "state.nc"
         state_tree(state).to_netcdf(path)
         loaded = xr.open_datatree(path)

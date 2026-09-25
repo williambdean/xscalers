@@ -198,14 +198,14 @@ class TestFunctionTransformer:
         assert len(state.data_vars) == 0
 
     def test_xscalers_affine_refuses_non_affine_steps(self, mixed_grain_ds):
-        from xscalers.compose import PerVariable
+        from xscalers.compose import VariableTransformer
         from xscalers.pipeline import Pipeline
 
         pipe = Pipeline(
             [
                 # media_tv is abs-gamma-mental — strictly positive, log-safe
                 ("log", Func({"media_tv": "log"})),
-                ("scale", PerVariable({"media_tv": MeanScaler(dims=("date",))})),
+                ("scale", VariableTransformer({"media_tv": MeanScaler(dims=("date",))})),
             ]
         )
         state = pipe.fit(mixed_grain_ds)

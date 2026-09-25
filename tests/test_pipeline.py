@@ -7,7 +7,7 @@ import pytest
 import xarray as xr
 
 from xscalers import preprocessing
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.core import from_spec
 from xscalers.pipeline import Pipeline, make_pipeline
 
@@ -15,8 +15,8 @@ from xscalers.pipeline import Pipeline, make_pipeline
 def _make():
     return Pipeline(
         [
-            ("target", PerVariable({"target": preprocessing.ZScore(dims=("date",))})),
-            ("media", PerVariable({"media": preprocessing.MeanScaler(dims=("date",))})),
+            ("target", VariableTransformer({"target": preprocessing.ZScore(dims=("date",))})),
+            ("media", VariableTransformer({"media": preprocessing.MeanScaler(dims=("date",))})),
         ]
     )
 
@@ -43,7 +43,7 @@ class TestPipeline:
     def test_named_step_transformer_reachable(self, national_ds):
         pipe = _make()
         steps = dict(pipe.steps)
-        assert isinstance(steps["media"], PerVariable)
+        assert isinstance(steps["media"], VariableTransformer)
 
     def test_from_spec_roundtrip(self, national_ds):
         pipe = _make()

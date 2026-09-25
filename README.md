@@ -20,9 +20,9 @@ class BaseTransformer:
     def inverse_transform(self, X, state) -> X
 ```
 
-Dataset and DataTree inputs are handled by per-variable dispatch — each
-variable keeps its own remaining dims, which is what makes mixed-grain inputs
-work with no special casing.
+Dataset and DataTree inputs are handled per variable — each variable keeps
+its own remaining dims, which is what makes mixed-grain inputs work with no
+special casing.
 
 ## The basics
 
@@ -50,12 +50,12 @@ its own state:
 ```python
 import xarray as xr
 
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.datasets import load_mixed_grain
 from xscalers.preprocessing import FixedScaler, MeanScaler, ZScore
 
 mixed: xr.Dataset = load_mixed_grain()
-dispatch = PerVariable(
+transformer = VariableTransformer(
     {
         "media_national": MeanScaler(dims=("date",)),
         "media_digital": ZScore(dims=("date",)),
@@ -63,8 +63,8 @@ dispatch = PerVariable(
     },
     default="passthrough",
 )
-state = dispatch.fit(mixed)              # one Dataset state per variable
-scaled = dispatch.transform(mixed, state)  # each var scaled by its own recipe
+state = transformer.fit(mixed)              # one Dataset state per variable
+scaled = transformer.transform(mixed, state)  # each var scaled by its own recipe
 ```
 
 ## Derived metrics — new variables, even across grains
@@ -78,7 +78,7 @@ below is a product-grain variable built from a national input:
 ```python
 import xarray as xr
 
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.datasets import load_mixed_grain
 from xscalers.pipeline import Pipeline
 from xscalers.preprocessing import Derive, Func, Splitter, ZScore
@@ -99,7 +99,7 @@ pipe = Pipeline(
             ),
         ),
         ("log", Func({"tv_per_control": "log"})),    # named funcs; log1p for zeros
-        ("scale", PerVariable({"tv_per_control": ZScore(dims=("date",))})),
+        ("scale", VariableTransformer({"tv_per_control": ZScore(dims=("date",))})),
     ]
 )
 state = pipe.fit(mixed)
@@ -150,7 +150,7 @@ under a piece-specific dim name; `inverse_transform` recombines and restores
 the original coordinate order:
 
 ```python
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.datasets import load_media_channels
 from xscalers.pipeline import Pipeline
 from xscalers.preprocessing import FixedScaler, MeanScaler, Splitter
@@ -171,7 +171,7 @@ pipe = Pipeline(
         ),
         (
             "scale",
-            PerVariable(
+            VariableTransformer(
                 {
                     "media_digital": MeanScaler(dims=("date",)),
                     "media_linear": FixedScaler(scale=1_000),
@@ -220,9 +220,9 @@ of the existing store; `append_state` exists only because
 native:
 
 ```python
-# continues above — `xr`, `mixed` and the fitted `dispatch` carry over
+# continues above — `xr`, `mixed` and the fitted `transformer` carry over
 from pathlib import Path
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.container import state_tree
 from xscalers.datasets import load_mixed_grain
 from xscalers.persistence import append_state
@@ -232,8 +232,8 @@ store: Path = Path("mmm.zarr")               # your existing input store
 mixed: xr.Dataset = load_mixed_grain()       # pretend it already lives there
 mixed.to_zarr(store)                         # ... here we create it first
 
-dispatch: PerVariable = PerVariable({"media_national": MeanScaler(dims=("date",))}, default="drop")
-state = dispatch.fit(mixed)
+transformer: VariableTransformer = VariableTransformer({"media_national": MeanScaler(dims=("date",))}, default="drop")
+state = transformer.fit(mixed)
 append_state(state_tree({"scale": state}), store, group="scalers")
 
 import xarray as xr
@@ -241,7 +241,7 @@ reloaded_tree = xr.open_datatree(store, group="scalers")
 reloaded_state = {
     name: node.dataset for name, node in reloaded_tree.children["scale"].children.items()
 }
-scaled_again = dispatch.transform(mixed, reloaded_state)
+scaled_again = transformer.transform(mixed, reloaded_state)
 import shutil; shutil.rmtree(store)          # tidy up after this example
 ```
 
@@ -307,7 +307,7 @@ silently wrong:
 ```python
 import numpy as np
 import xarray as xr
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.datasets import load_mixed_grain
 from xscalers.pipeline import Pipeline
 from xscalers.preprocessing import Derive, Func, FixedScaler, ZScore
@@ -325,7 +325,7 @@ pipe = Pipeline(
             ),
         ),
         ("log", Func({"tv_per_control": "log"})),
-        ("scale", PerVariable({"tv_per_control": FixedScaler(scale=1.0)})),
+        ("scale", VariableTransformer({"tv_per_control": FixedScaler(scale=1.0)})),
     ]
 )
 state = pipe.fit(load_mixed_grain())
@@ -341,14 +341,14 @@ Requires the optional `pytensor` extra (`pip install "xscalers[pytensor]"`).
 
 ```python
 import pytensor.xtensor as ptx
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.datasets import load_national
 from xscalers.pipeline import Pipeline
 from xscalers.preprocessing import MeanScaler
 
 scaler = MeanScaler(dims=("date",))
 data = load_national()
-pipe = Pipeline([("scale", PerVariable({"media": scaler}))])
+pipe = Pipeline([("scale", VariableTransformer({"media": scaler}))])
 state = pipe.fit(data)                                     # fitted pipeline state
 
 contrib = ptx.xtensor("channel_contrib", dims=("date", "channel"))
@@ -377,7 +377,7 @@ back = bound.inverse_transform(scaled_again)     # ...and its inverse
 ## For sklearn users
 
 sklearn vocabulary: `fit` / `transform` / `inverse_transform` / `Pipeline`,
-`ColumnTransformer`-style dispatch (that's `PerVariable`), `make_pipeline`,
+`ColumnTransformer`-style per-variable treatment (that's `VariableTransformer`), `make_pipeline`,
 **`make_union`** (many pipelines over the same dataset, merged with a
 collision policy — covariates-only by design), `"passthrough"` steps. The
 deliberate departure: **state is explicit and passed around**, not hidden as

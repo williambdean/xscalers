@@ -7,7 +7,7 @@ import pytest
 import xarray as xr
 
 from xscalers import Func, MeanScaler, ZScore
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.container import state_from_tree, state_tree
 from xscalers.pipeline import Pipeline, make_pipeline, make_union
 from xscalers.preprocessing import Derive
@@ -25,7 +25,7 @@ def _branch_digital():
             op="ratio",
         ),
         Func({"level_vs_reference": "log"}),
-        PerVariable({"level_vs_reference": ZScore(dims=("date",))}),
+        VariableTransformer({"level_vs_reference": ZScore(dims=("date",))}),
     )
 
 
@@ -38,7 +38,7 @@ def _branch_seasonality():
             op="ratio",
         ),
         Func({"level_vs_seasonality": "log"}),
-        PerVariable({"level_vs_seasonality": ZScore(dims=("date",))}),
+        VariableTransformer({"level_vs_seasonality": ZScore(dims=("date",))}),
     )
 
 
@@ -67,7 +67,7 @@ def _linear_reference():
             ("log", Func({"level_vs_reference": "log", "level_vs_seasonality": "log"})),
             (
                 "scale",
-                PerVariable(
+                VariableTransformer(
                     {
                         "level_vs_reference": ZScore(dims=("date",)),
                         "level_vs_seasonality": ZScore(dims=("date",)),
@@ -107,8 +107,8 @@ class TestMerge:
 class TestCollisions:
     def test_conflicting_scales_raise(self, national_ds):
         union = make_union(
-            ("a", PerVariable({"target": ZScore(dims=("date",))})),
-            ("b", PerVariable({"target": MeanScaler(dims=("date",))})),
+            ("a", VariableTransformer({"target": ZScore(dims=("date",))})),
+            ("b", VariableTransformer({"target": MeanScaler(dims=("date",))})),
         )
         state = union.fit(national_ds)
         with pytest.raises(ValueError, match="target"):
@@ -116,8 +116,8 @@ class TestCollisions:
 
     def test_identical_branches_merge_silently(self, national_ds):
         union = make_union(
-            ("a", PerVariable({"target": ZScore(dims=("date",))})),
-            ("b", PerVariable({"target": ZScore(dims=("date",))})),
+            ("a", VariableTransformer({"target": ZScore(dims=("date",))})),
+            ("b", VariableTransformer({"target": ZScore(dims=("date",))})),
         )
         state = union.fit(national_ds)
         out = union.transform(national_ds, state)
@@ -141,7 +141,7 @@ class TestInverse:
 class TestAffine:
     def test_affine_refusal_names_the_union(self, mixed_grain_ds):
         union = make_union(_branch_digital(), _branch_seasonality())
-        pipe = Pipeline([("union", union), ("scale", PerVariable({"controls_nat": ZScore(dims=("date",))}))])
+        pipe = Pipeline([("union", union), ("scale", VariableTransformer({"controls_nat": ZScore(dims=("date",))}))])
         state = pipe.fit(mixed_grain_ds)
         with pytest.raises(TypeError, match="Union"):
             pipe.affine(state)

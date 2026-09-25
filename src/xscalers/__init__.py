@@ -11,7 +11,7 @@
 """
 
 from .binding import lift_state, lift_state_if_symbolic
-from .compose import PerVariable
+from .compose import VariableTransformer
 from .container import flatten, reassemble, state_tree
 from .core import (
     REGISTRY,
@@ -38,11 +38,11 @@ __all__ = [
     "Func",
     "MeanScaler",
     "NonInvertibleError",
-    "PerVariable",
     "Pipeline",
     "Selector",
     "Splitter",
     "Union",
+    "VariableTransformer",
     "ZScore",
     "affine_pair",
     "append_state",

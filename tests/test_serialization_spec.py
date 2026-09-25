@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 
 from xscalers import preprocessing
-from xscalers.compose import PerVariable
+from xscalers.compose import VariableTransformer
 from xscalers.core import from_spec, to_spec
 from xscalers.pipeline import Pipeline
 
@@ -40,7 +40,7 @@ class TestPipelineSpec:
     def test_pipeline_spec_rebuilds_and_refits_identically(self, national_ds):
         pipe = Pipeline(
             [
-                ("scale", PerVariable({"target": preprocessing.ZScore(dims=("date",))})),
+                ("scale", VariableTransformer({"target": preprocessing.ZScore(dims=("date",))})),
             ]
         )
         spec = pipe.to_spec()
@@ -65,3 +65,18 @@ class TestStateNetcdf:
         )
         assert np.allclose(out.values, expected.values)
         assert loaded.attrs["kind"] == "zscore"
+
+
+class TestLegacySpecKinds:
+    def test_renamed_kind_still_loads(self):
+        """Recipes written before the rename keep loading (kind = class name)."""
+        spec = {
+            "kind": "PerVariable",
+            "kwargs": {
+                "mapping": {"media": {"kind": "ZScore", "kwargs": {"dims": ["date"]}}},
+                "default": "passthrough",
+            },
+        }
+        rebuilt = from_spec(spec)
+        assert isinstance(rebuilt, VariableTransformer)
+        assert to_spec(rebuilt)["kind"] == "VariableTransformer"

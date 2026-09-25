@@ -116,29 +116,29 @@ class BaseTransformer(ABC):
 
     def fit(self, X: Any) -> Any:
         """Fit: DataArrays (and symbolic inputs) directly; containers via dispatch."""
-        from .compose import PerVariable
+        from .compose import VariableTransformer
 
         if self.__scalarish(X):
             return self.compute(X)
-        return PerVariable(default=self).fit(X)
+        return VariableTransformer(default=self).fit(X)
 
     def transform(
         self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
     ) -> Any:
-        from .compose import PerVariable
+        from .compose import VariableTransformer
 
         if self.__scalarish(X):
             return self._transform(X, state)
-        return PerVariable(default=self).transform(X, state)
+        return VariableTransformer(default=self).transform(X, state)
 
     def inverse_transform(
         self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
     ) -> Any:
-        from .compose import PerVariable
+        from .compose import VariableTransformer
 
         if self.__scalarish(X):
             return self._inverse_transform(X, state)
-        return PerVariable(default=self).inverse_transform(X, state)
+        return VariableTransformer(default=self).inverse_transform(X, state)
 
     @staticmethod
     def __scalarish(X: Any) -> bool:

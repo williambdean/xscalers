@@ -205,7 +205,7 @@ class Splitter:
 
     The original variable is replaced by child nodes ``media/digital``,
     ``media/tv`` (var renamed to the piece name), so a following
-    ``PerVariable`` step scales each piece independently. DataTree requires
+    ``VariableTransformer`` step scales each piece independently. DataTree requires
     child coords to not conflict with the parent's, so ``transform`` removes
     the source var from the source node's dataset.
     """

@@ -1,8 +1,10 @@
-"""PerVariable dispatch: a map from variable (or DataTree node) to transformer.
+"""VariableTransformer — the ColumnTransformer analog, one unit per variable.
 
-Mixed-grain inputs need no special casing — each variable's fitted state keeps
-that variable's own remaining dims. Unmapped variables pass through, mirroring
-sklearn's ``ColumnTransformer(remainder="passthrough")`` semantics on ``data_vars``.
+Mirroring ``sklearn.compose``: a map from variable (or DataTree node) to
+transformer, applied per unit. Mixed-grain inputs need no special casing —
+each variable's fitted state keeps that variable's own remaining dims.
+Unmapped variables pass through or drop, mirroring
+``ColumnTransformer(remainder="passthrough")`` / ``remainder="drop"``.
 
 Fitted state for this composite is ``dict[str, xr.Dataset]`` (one Dataset per
 variable), which ``state_tree`` nests into the canonical DataTree artifact.
@@ -18,11 +20,11 @@ import xarray as xr
 from .container import flatten, reassemble
 from .core import register
 
-__all__ = ["PerVariable"]
+__all__ = ["VariableTransformer"]
 
 
 @register
-class PerVariable:
+class VariableTransformer:
     """Map variables/data-tree nodes onto their own transformers.
 
     ``default`` is either ``"passthrough"`` (unknown keys are left untouched,
@@ -88,7 +90,7 @@ class PerVariable:
             import warnings
 
             warnings.warn(
-                f"PerVariable mapping key {key!r} is missing from the input's "
+                f"VariableTransformer mapping key {key!r} is missing from the input's "
                 f"data variables{hint} (coordinates or DataTree children "
                 "cannot be scaled directly); the variable will pass through unscaled.",
                 UserWarning,

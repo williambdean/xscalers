@@ -1,4 +1,4 @@
-"""Contract tests — the library's core semantics: state shape, affine view, dispatch"""
+"""Contract tests — the library's core semantics: state shape, affine view, composition"""
 
 from __future__ import annotations
 

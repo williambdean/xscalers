@@ -51,7 +51,7 @@ class BaseTransformer:
 ```
 
 - Inputs: `DataArray` (direct), plus `Dataset` / `DataTree` / `dict` via
-  per-variable dispatch.
+  per-variable treatment.
 - Per-variable fits keep each variable's own remaining dims — mixed grains
   need no special casing.
 - Canonical fitted state across a pipeline: `DataTree` with children per
@@ -64,7 +64,7 @@ class BaseTransformer:
 | xscalers | sklearn | holds |
 | --- | --- | --- |
 | `preprocessing` | `preprocessing` | `ZScore`, `MeanScaler`, `FixedScaler`, `Func`, `Derive`, `Splitter`, `Selector` |
-| `compose` | `compose` | `PerVariable` (the ColumnTransformer analog) |
+| `compose` | `compose` | `VariableTransformer` (the ColumnTransformer analog) |
 | `pipeline` | `pipeline` | `Pipeline`, `Union`, `make_pipeline`, `make_union` |
 | `datasets` | `datasets` | `load_national`, `load_mixed_grain`, `load_media_channels` |
 | `core`, `container`, `binding`, `persistence`, `serialize` | `base` + internals | the contract, DataTree/flatten plumbing, xtensor lifting, state IO, specs |
@@ -120,7 +120,7 @@ flagship cross-backend parity test passing before any refactor.
   apply one fitted transformation to new data: ``pipe["media"].transform(...)``.
 - ``make_pipeline(*steps)`` auto-names from transformer classes
   (``zscore``, ``zscore-1``, ...); ``"passthrough"`` is a valid step value;
-  ``PerVariable(..., default="drop")`` drops unmapped variables.
+  ``VariableTransformer(..., default="drop")`` drops unmapped variables.
 
 ## Deferred (documented, not built)
 

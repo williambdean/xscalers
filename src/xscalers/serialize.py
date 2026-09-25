@@ -30,11 +30,15 @@ def spec_of(transformer: Any) -> dict[str, Any]:
     return to_spec(transformer)
 
 
+# specs written before a rename still load: the kind string is the class name
+_LEGACY_KINDS = {"PerVariable": "VariableTransformer"}
+
+
 def from_spec(spec: Mapping[str, Any]) -> Any:
     """Rebuild a transformer from a plain-dict spec."""
     from .core import REGISTRY
 
-    kind = spec["kind"]
+    kind = _LEGACY_KINDS.get(spec["kind"], spec["kind"])
     if kind == "Pipeline":
         from .pipeline import Pipeline
 
