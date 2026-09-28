@@ -9,7 +9,15 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from xscalers.datasets import load_media_channels, load_mixed_grain, load_national
+from xscalers.compose import VariableTransformer
+from xscalers.datasets import (
+    load_media_channels,
+    load_mixed_grain,
+    load_national,
+    load_panel,
+)
+from xscalers.pipeline import Pipeline
+from xscalers.preprocessing import MeanScaler, Splitter
 
 
 class TestLoadNational:
@@ -44,6 +52,102 @@ class TestLoadMediaChannels:
 
     def test_deterministic(self):
         assert load_media_channels().identical(load_media_channels())
+
+
+class TestLoadPanel:
+    def test_inputs_at_two_grains(self):
+        ds = load_panel()
+        assert ds["media_national"].dims == ("date", "channel")
+        assert ds["media_digital"].dims == ("date", "product", "digital")
+        assert ds["target"].dims == ("date", "product")
+
+    def test_the_rest_of_the_inputs_are_at_product_grain(self):
+        ds = load_panel()
+        for name in ("level", "flag", "share", "peer_level", "peer_flag"):
+            assert ds[name].dims == ("date", "product")
+
+    def test_flags_are_binary_and_share_is_a_proportion(self):
+        ds = load_panel()
+        for name in ("flag", "peer_flag"):
+            assert set(np.unique(ds[name].values)) <= {0.0, 1.0}
+        assert ds["share"].min() >= 0 and ds["share"].max() <= 1
+
+    def test_the_two_levels_are_positive_and_ratioable(self):
+        ds = load_panel()
+        assert ds["level"].min() > 0 and ds["peer_level"].min() > 0
+        assert (ds["peer_level"] / ds["level"]).dims == ("date", "product")
+
+    def test_deterministic(self):
+        assert load_panel().identical(load_panel())
+
+
+class TestMixedGrainBroadcastOrder:
+    """A national series reaches a product-grain model by broadcasting
+    upstream. Scaling at native grain and scaling after the broadcast agree
+    numerically -- only the fitted state's shape differs -- so prefer the
+    native-grain order and get a state without a redundant product axis."""
+
+    def _split(self, pieces):
+        return Pipeline(
+            [
+                (
+                    "split",
+                    Splitter(
+                        "media_national",
+                        {p: {"channel": c} for p, c in pieces.items()},
+                    ),
+                )
+            ]
+        ).fit_transform
+
+    def test_scaling_at_native_grain_matches_broadcast_then_scale(self):
+        raw = load_panel()
+        pieces = {"tv": "tv", "ooh": "ooh"}  # piece name -> channel label
+        recipes = {
+            f"media_national_{p_}": MeanScaler(dims=("date",)) for p_ in pieces
+        }
+
+        # native grain: split (date, channel) -> scale -> broadcast to product
+        native = self._split(pieces)(raw)
+        scaler = VariableTransformer(recipes)
+        native = scaler.transform(native, scaler.fit(native))
+        native = native.copy()
+        for piece in pieces:  # only the national pieces need the product axis
+            name = f"media_national_{piece}"
+            native[name] = native[name].expand_dims({"product": raw["product"]})
+
+        # broadcast first, then split and scale the (date, product) pieces
+        broadcast = raw.copy()
+        broadcast["media_national"] = raw["media_national"].expand_dims(
+            {"product": raw["product"]}
+        ).transpose("date", "product", "channel")
+        after_bare = self._split(pieces)(broadcast)
+        after_scaler = VariableTransformer(recipes)
+        after = after_scaler.transform(after_bare, after_scaler.fit(after_bare))
+
+        for piece in pieces:
+            name = f"media_national_{piece}"
+            assert np.allclose(
+                native[name].transpose("date", "product", f"channel_{piece}").values,
+                after[name].values,
+            ), name
+
+    def test_native_grain_state_has_no_redundant_product_axis(self):
+        raw = load_panel()
+        native = self._split({"tv": "tv"})(raw)
+        state = VariableTransformer({"media_national_tv": MeanScaler(dims=("date",))}).fit(
+            native
+        )
+        assert "product" not in state["media_national_tv"]["mean"].dims
+
+        broadcast = raw.copy()
+        broadcast["media_national"] = raw["media_national"].expand_dims(
+            {"product": raw["product"]}
+        )
+        after = VariableTransformer({"media_national_tv": MeanScaler(dims=("date",))}).fit(
+            self._split({"tv": "tv"})(broadcast)
+        )
+        assert "product" in after["media_national_tv"]["mean"].dims
 
 
 class TestReadmeExecutes:

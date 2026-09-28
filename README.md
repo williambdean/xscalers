@@ -34,15 +34,31 @@ from xscalers.preprocessing import MeanScaler
 
 national: xr.Dataset = load_national()
 
-state: xr.Dataset = MeanScaler(dims=("date",)).fit(national["media"])
-state         # {"center": 0.0, "scale": per-channel mean over date}
+scaler = MeanScaler(("date",))
+state = scaler.fit(national["media"])
+scaled = scaler.transform(national["media"], state)
 
-scaled = MeanScaler(dims=("date",)).transform(national["media"], state)
-
-# state is editable — transforms honor it
-state["scale"] = state["scale"] * 2
-halved = MeanScaler(dims=("date",)).transform(national["media"], state)
+state
 ```
+
+```text
+<xarray.Dataset> Size: 96B
+Dimensions:  (channel: 3)
+Coordinates:
+  * channel  (channel) <U6 72B 'search' 'social' 'fb'
+Data variables:
+    mean     (channel) float64 24B 49.68 48.81 53.79
+Attributes:
+    kind:         mean
+    dims:         ['date']
+    scaled_from:  media
+    spec_sha:     af4a187be0e9
+    recipe:       MeanScaler(dims=['date'])
+```
+
+State is a value on the record — inspect it, save it, pass it to another
+process. Hand-editing is a manual override (the stamp records the recipe,
+not your edits).
 
 Mixed grains need no special casing: `fit` a Dataset and each variable gets
 its own state:
@@ -61,7 +77,7 @@ transformer = VariableTransformer(
         "media_digital": ZScore(dims=("date",)),
         "media_tv": FixedScaler(scale=1_000_000),
     },
-    default="passthrough",
+    remainder="passthrough",
 )
 state = transformer.fit(mixed)              # one Dataset state per variable
 scaled = transformer.transform(mixed, state)  # each var scaled by its own recipe
@@ -73,7 +89,11 @@ scaled = transformer.transform(mixed, state)  # each var scaled by its own recip
 that later steps treat like anything else. The two pieces don't have to come
 from the same variable or the same grain — a national series over a
 product-grain control broadcasts up to product grain, so `tv_per_control`
-below is a product-grain variable built from a national input:
+below is a product-grain variable built from a national input.
+
+Ops are a closed, spec-serializable vocabulary — `op="ratio | diff | product"`
+— and selector pieces take `reduce="sum | mean | first | last"` for
+share-of-total style derivations:
 
 ```python
 import xarray as xr
@@ -81,7 +101,7 @@ import xarray as xr
 from xscalers.compose import VariableTransformer
 from xscalers.datasets import load_mixed_grain
 from xscalers.pipeline import Pipeline
-from xscalers.preprocessing import Derive, Func, Splitter, ZScore
+from xscalers.preprocessing import Derive, FunctionTransformer, Splitter, ZScore
 
 mixed: xr.Dataset = load_mixed_grain()
 mixed["media_national"].dims                  # (date, media) — national grain
@@ -93,12 +113,12 @@ pipe = Pipeline(
             "derive",
             Derive(
                 name="tv_per_control",
-                numerator=("media_national", {"media": "tv"}),
-                denominator=("controls_prod", {}),   # {} = the whole variable
+                left=("media_national", {"media": "tv"}),
+                right=("controls_prod", {}),   # {} = the whole variable
                 op="ratio",
             ),
         ),
-        ("log", Func({"tv_per_control": "log"})),    # named funcs; log1p for zeros
+        ("log", FunctionTransformer({"tv_per_control": "log"})),  # named funcs
         ("scale", VariableTransformer({"tv_per_control": ZScore(dims=("date",))})),
     ]
 )
@@ -130,26 +150,26 @@ extra coordinate dimension — `controls (date, product, control)` with
 from xscalers.preprocessing import Derive
 
 share = Derive(
-    name="level_ratio",
-    numerator=("controls", {"control": "level"}),
-    denominator=("controls", {"control": "reference"}),
-    op="ratio",
+    name="level_diff",                           # op="diff" this time:
+    left=("controls", {"control": "level"}), # level minus reference,
+    right=("controls", {"control": "reference"}),
+    op="diff",                                   # not a ratio
 )
 derived = share.transform(mixed, share.fit(mixed))
-derived["level_ratio"].dims                   # (date, product)
+derived["level_diff"].dims                     # (date, product)
 ```
 
 ## Dropping variables and coordinate values
 
-`Dropper` is the drop verb — the xarray answer to sklego's `ColumnDropper`.
+`VariableDropper` is the drop verb — the xarray answer to sklego's `ColumnDropper`.
 `vars=` removes whole variables; `labels=` removes values from a coordinate
 dataset-wide (the complement of keeping, which is `Selector`'s job):
 
 ```python
 # continues above — `mixed` carries over
-from xscalers.preprocessing import Dropper
+from xscalers.preprocessing import VariableDropper
 
-prune = Dropper(vars=["media_national", "controls_prod"], labels={"control": ["reference"]})
+prune = VariableDropper(vars=["media_national", "controls_prod"], labels={"control": ["reference"]})
 pruned = prune.transform(mixed, prune.fit(mixed))
 "media_national" in pruned.data_vars          # False — raw inputs are gone
 "reference" in pruned.coords["control"].values  # False — every variable shrank with it
@@ -162,7 +182,7 @@ them, so later steps never have to enumerate what they don't care about:
 # continues above — `mixed` carries over
 from xscalers.compose import VariableTransformer
 from xscalers.pipeline import Pipeline
-from xscalers.preprocessing import Derive, Dropper, ZScore
+from xscalers.preprocessing import Derive, VariableDropper, ZScore
 
 pipe = Pipeline(
     [
@@ -170,12 +190,12 @@ pipe = Pipeline(
             "derive",
             Derive(
                 name="tv_per_control",
-                numerator=("media_national", {"media": "tv"}),
-                denominator=("controls_prod", {}),
+                left=("media_national", {"media": "tv"}),
+                right=("controls_prod", {}),
                 op="ratio",
             ),
         ),
-        ("prune", Dropper(vars=["media_national", "controls_prod"])),
+        ("prune", VariableDropper(vars=["media_national", "controls_prod"])),
         ("scale", VariableTransformer({"tv_per_control": ZScore(dims=("date",))})),
     ]
 )
@@ -183,7 +203,7 @@ model_ready = pipe.fit_transform(mixed)
 sorted(model_ready.data_vars)                 # raw inputs pruned, ratio kept
 ```
 
-Dropping destroys data, so — like `Selector` — `Dropper.inverse_transform`
+Dropping destroys data, so — like `Selector` — `VariableDropper.inverse_transform`
 raises instead of guessing, and `pipe.inverse_transform` refuses for the whole
 chain. Real-terms conversion is unaffected: `pipe.unscale(contrib,
 var="tv_per_control")` still walks that one variable backwards. `fit` validates
@@ -193,13 +213,13 @@ dropping *every* variable raises `ValueError`, and a non-`Dataset` input raises
 
 If you need the reverse, a pipeline that scales what it keeps, `Splitter` is
 the invertible way to split one variable into differently-treated pieces, and
-`VariableTransformer(..., default="drop")` is the leftover-dropping sibling.
+`VariableTransformer(..., remainder="drop")` is the leftover-dropping sibling.
 
 
 ## Splitting one variable into differently-treated pieces
 
 Different treatment *within* one media variable (digital vs TV) works by
-splitting into pieces, scaling each, then recombining. Real MMM inputs are a
+splitting into pieces, scaling each, then recombining. Real inputs are a
 plain Dataset of variables, so pieces become *sibling variables*
 (`media_digital`, `media_linear`), each keeping its slice of the coordinate
 under a piece-specific dim name; `inverse_transform` recombines and restores
@@ -284,13 +304,13 @@ from xscalers.datasets import load_mixed_grain
 from xscalers.persistence import append_state
 from xscalers.preprocessing import MeanScaler
 
-store: Path = Path("mmm.zarr")               # your existing input store
+store: Path = Path("inputs.zarr")             # your existing input store
 mixed: xr.Dataset = load_mixed_grain()       # pretend it already lives there
 mixed.to_zarr(store)                         # ... here we create it first
 
-transformer: VariableTransformer = VariableTransformer({"media_national": MeanScaler(dims=("date",))}, default="drop")
+transformer: VariableTransformer = VariableTransformer({"media_national": MeanScaler(dims=("date",))}, remainder="drop")
 state = transformer.fit(mixed)
-append_state(state_tree({"scale": state}), store, group="scalers")
+append_state(state_tree({"scale": state}), store, group="scalers")  # state under "scale"
 
 import xarray as xr
 reloaded_tree = xr.open_datatree(store, group="scalers")
@@ -331,10 +351,11 @@ state.to_netcdf("scaler_state.nc")                # ...and its scaling, side by 
 idata_back = xr.open_datatree("posterior.nc")     # DataTree in, DataTree out
 state_back = xr.open_dataset("scaler_state.nc")
 
-# real-terms conversion needs BOTH parts of the affine pair (center, scale):
+# real-terms conversion: the affine pair (center, scale) — MeanScaler is
+# divisive, so its composed view is (center=0, scale=mean):
 posterior_beta: float = float(idata_back["prior"]["beta"].mean())
 contribution_scaled: float = posterior_beta * float(np.asarray(y).mean())
-contributions_original_scale = contribution_scaled * float(state_back["scale"]) + float(state_back["center"])
+contributions_original_scale = contribution_scaled * float(state_back["mean"])
 import os
 for name in ("posterior.nc", "scaler_state.nc"):
     os.remove(name)
@@ -366,7 +387,7 @@ import xarray as xr
 from xscalers.compose import VariableTransformer
 from xscalers.datasets import load_mixed_grain
 from xscalers.pipeline import Pipeline
-from xscalers.preprocessing import Derive, Func, FixedScaler, ZScore
+from xscalers.preprocessing import Derive, FixedScaler, FunctionTransformer, ZScore
 import os
 
 pipe = Pipeline(
@@ -375,12 +396,12 @@ pipe = Pipeline(
             "derive",
             Derive(
                 name="tv_per_control",
-                numerator=("media_national", {"media": "tv"}),
-                denominator=("controls_prod", {}),
+                left=("media_national", {"media": "tv"}),
+                right=("controls_prod", {}),
                 op="ratio",
             ),
         ),
-        ("log", Func({"tv_per_control": "log"})),
+        ("log", FunctionTransformer({"tv_per_control": "log"})),
         ("scale", VariableTransformer({"tv_per_control": FixedScaler(scale=1.0)})),
     ]
 )
@@ -436,7 +457,7 @@ sklearn vocabulary: `fit` / `transform` / `inverse_transform` / `Pipeline`,
 `ColumnTransformer`-style per-variable treatment (that's `VariableTransformer`), `make_pipeline`,
 **`make_union`** (many pipelines over the same dataset, merged with a
 collision policy — covariates-only by design), `"passthrough"` steps. The
-drop verb lives in `Dropper` — sklego's `ColumnDropper` over
+drop verb lives in `VariableDropper` — sklego's `ColumnDropper` over
 `drop_vars`/`drop_sel`, with `Selector` covering the keeping side. The
 deliberate departure: **state is explicit and passed around**, not hidden as
 `scaler.mean_` — that is what lets you edit fitted values and reuse them

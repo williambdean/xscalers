@@ -19,16 +19,15 @@ class TestLiftState:
 
         state = preprocessing.MeanScaler(dims=("date",)).fit(national_ds["media"])
         lifted = lift_state(state)
-        assert lifted["scale"].dims == ("channel",)
-        assert type(lifted["center"]).__name__ == "XTensorConstant"
+        assert lifted["mean"].dims == ("channel",)
+        assert "center" not in lifted  # divisive: no center entry to lift
 
     def test_lift_is_idempotent_for_symbolic_entries(self, national_ds):
         from xscalers.binding import lift_state
 
-        state = preprocessing.MeanScaler(dims=("date",)).fit(national_ds["media"])
-        symbol = ptx.xtensor("scale", dims=("channel",))
-        lifted = lift_state({"center": state["center"], "scale": symbol})
-        assert lifted["scale"] is symbol
+        symbol = ptx.xtensor("mean", dims=("channel",))
+        lifted = lift_state({"mean": symbol})
+        assert lifted["mean"] is symbol
 
     def test_dataarray_lift_strips_coords(self, national_ds):
         from xscalers.binding import lift_state
@@ -37,14 +36,14 @@ class TestLiftState:
         lifted = lift_state(state)
         # symbolic entries have no coord carrier: accessing coords raises
         with pytest.raises(NotImplementedError):
-            lifted["scale"].coords  # noqa: B018 — the raise IS the property under test
+            lifted["mean"].coords  # noqa: B018 — the raise IS the property under test
         # and the lifted values still carry the dim names only
-        assert lifted["scale"].dims == ("channel",)
+        assert lifted["mean"].dims == ("channel",)
 
 
 class TestSymbolicTransformFromFittedState:
     def test_fit_mean_scaler_unscales_symbolic_contributions(self, national_ds):
-        """The MMM pattern: fit on xarray, unscale in-graph contributions."""
+        """The downstream pattern: fit on xarray, unscale in-graph contributions."""
         scaler = preprocessing.MeanScaler(dims=("date",))
         state = scaler.fit(national_ds["media"])
 

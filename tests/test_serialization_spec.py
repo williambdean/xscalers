@@ -8,7 +8,7 @@ import xarray as xr
 from xscalers import preprocessing
 from xscalers.compose import VariableTransformer
 from xscalers.core import from_spec, to_spec
-from xscalers.pipeline import Pipeline
+from xscalers.pipeline import Pipeline, Union
 
 
 class TestScalerSpecs:
@@ -24,7 +24,7 @@ class TestScalerSpecs:
         rebuilt = from_spec(to_spec(original))
         before = original.fit(national_ds["target"])
         after = rebuilt.fit(national_ds["target"])
-        assert np.allclose(before["scale"].values, after["scale"].values)
+        assert np.allclose(before["mean"].values, after["mean"].values)
         assert before.attrs == after.attrs or before.attrs["kind"] == after.attrs["kind"]
 
 
@@ -50,6 +50,30 @@ class TestSpecRegistry:
 
 
 class TestPipelineSpec:
+    def test_the_free_to_spec_matches_the_pipeline_method(self):
+        pipe = Pipeline(
+            [("scale", VariableTransformer({"target": preprocessing.ZScore(dims=("date",))}))]
+        )
+        assert to_spec(pipe) == pipe.to_spec()
+        assert to_spec(pipe)["kind"] == "Pipeline"
+        assert from_spec(to_spec(pipe)).to_spec() == pipe.to_spec()
+
+    def test_union_spec_round_trips(self):
+        pipe = Pipeline(
+            [("scale", VariableTransformer({"target": preprocessing.ZScore(dims=("date",))}))]
+        )
+        union = Union([("a", pipe), ("b", pipe)])
+        assert to_spec(union)["kind"] == "Union"
+        assert from_spec(to_spec(union)).to_spec() == union.to_spec()
+
+    def test_variable_transformer_spec_keeps_passthrough_strings(self):
+        vt = VariableTransformer(
+            {"price": preprocessing.MeanScaler(dims=("date",)), "promo": "passthrough"}
+        )
+        rebuilt = from_spec(to_spec(vt))
+        assert rebuilt.mapping["promo"] == "passthrough"
+        assert to_spec(rebuilt) == to_spec(vt)
+
     def test_pipeline_spec_rebuilds_and_refits_identically(self, national_ds):
         pipe = Pipeline(
             [
@@ -61,8 +85,8 @@ class TestPipelineSpec:
         fitted = rebuilt.fit(national_ds)
         original_state = pipe.fit(national_ds)
         assert np.allclose(
-            fitted["scale"]["target"]["scale"].values,
-            original_state["scale"]["target"]["scale"].values,
+            fitted["scale"]["target"]["std"].values,
+            original_state["scale"]["target"]["std"].values,
         )
 
 

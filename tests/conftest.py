@@ -1,4 +1,4 @@
-"""Fixtures capturing the MMM-shaped scenarios the library must serve."""
+"""Fixtures capturing the panel-shaped scenarios the library must serve."""
 
 from __future__ import annotations
 

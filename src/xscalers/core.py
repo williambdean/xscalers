@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import xarray as xr
@@ -29,9 +29,96 @@ __all__ = [
     "as_state",
     "from_spec",
     "is_symbolic",
+    "recipe_repr",
     "register",
+    "spec_sha",
     "to_spec",
 ]
+
+
+def recipe_repr(transformer: Any) -> str:
+    """Human-readable one-liner of a transformer's recipe.
+
+    Constructor style, nested specs recurse (e.g.
+    ``VariableTransformer(mapping={'tv': ZScore(dims=['date'])})``).
+    Best-effort: non-serializable transformers raise through.
+    """
+    from .serialize import to_spec
+
+    return _recipe_from_spec(to_spec(transformer))
+
+
+def _recipe_from_spec(spec: Any) -> str:
+    if isinstance(spec, str):
+        return spec
+    if not isinstance(spec, Mapping) or "kind" not in spec:
+        return repr(spec)
+    kind = spec["kind"]
+    kwargs = spec.get("kwargs", {}) or {}
+    parts = [
+        f"{key}={_recipe_from_spec(value)}" if _is_spec(value) else f"{key}={value!r}"
+        for key, value in kwargs.items()
+        if value is not None
+    ]
+    return f"{kind}({', '.join(parts)})"
+
+
+def _is_spec(value: Any) -> bool:
+    return (
+        isinstance(value, Mapping)
+        and "kind" in value
+        and "kwargs" in value
+        and isinstance(value["kwargs"], Mapping)
+    ) or (
+        isinstance(value, (list, tuple))
+        and bool(value)
+        and all(isinstance(item, Mapping) and "kind" in item for item in value)
+    )
+
+
+def spec_sha(transformer: Any) -> str:
+    """Deterministic 12-hex fingerprint of a transformer's recipe.
+
+    Source of the hash: ``to_spec`` (JSON, sort_keys). Non-serializable
+    transformers raise whatever ``to_spec_kwargs`` raises — stamping is
+    best-effort and callers should tolerate that.
+    """
+    import hashlib
+    import json
+
+    from .serialize import to_spec
+
+    blob = json.dumps(to_spec(transformer), sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
+def _stamp_state(state: Any, transformer: Any) -> Any:
+    """Best-effort provenance: stamp ``spec_sha`` onto state Dataset leaves.
+
+    Mutates and returns ``state`` (states are freshly built in ``compute``
+    and dispatch). A fingerprint only — the recipe itself lives in the
+    recipe artifact, never in the state (recipe/state never mix).
+    """
+    try:
+        sha = spec_sha(transformer)
+        recipe = recipe_repr(transformer)
+    except (NotImplementedError, AttributeError, TypeError):
+        return state  # non-serializable transformer: no stamp, no harm
+
+    def walk(node: Mapping[str, Any]) -> None:
+        for value in node.values():
+            if isinstance(value, xr.Dataset):
+                value.attrs["spec_sha"] = sha
+                value.attrs["recipe"] = recipe
+            elif isinstance(value, Mapping):
+                walk(value)
+
+    if isinstance(state, xr.Dataset):
+        state.attrs["spec_sha"] = sha
+        state.attrs["recipe"] = recipe
+    elif isinstance(state, Mapping):
+        walk(state)
+    return state
 
 
 class NonInvertibleError(RuntimeError):
@@ -115,12 +202,16 @@ class BaseTransformer(ABC):
         raise NotImplementedError
 
     def fit(self, X: Any) -> Any:
-        """Fit: DataArrays (and symbolic inputs) directly; containers via dispatch."""
+        """Fit: DataArrays (and symbolic inputs) directly; containers via dispatch.
+
+        Stamps ``spec_sha`` provenance onto the returned state leaves
+        (best-effort; see :func:`_stamp_state`).
+        """
         from .compose import VariableTransformer
 
         if self.__scalarish(X):
-            return self.compute(X)
-        return VariableTransformer(default=self).fit(X)
+            return _stamp_state(self.compute(X), self)
+        return _stamp_state(VariableTransformer(remainder=self).fit(X), self)
 
     def transform(
         self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
@@ -129,7 +220,7 @@ class BaseTransformer(ABC):
 
         if self.__scalarish(X):
             return self._transform(X, state)
-        return VariableTransformer(default=self).transform(X, state)
+        return VariableTransformer(remainder=self).transform(X, state)
 
     def inverse_transform(
         self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
@@ -138,7 +229,7 @@ class BaseTransformer(ABC):
 
         if self.__scalarish(X):
             return self._inverse_transform(X, state)
-        return VariableTransformer(default=self).inverse_transform(X, state)
+        return VariableTransformer(remainder=self).inverse_transform(X, state)
 
     @staticmethod
     def __scalarish(X: Any) -> bool:
@@ -169,7 +260,27 @@ def _all_dims(X: Any, data_dims: tuple[str, ...] | None) -> tuple[str, ...]:
 
 
 class BaseAffineTransformer(BaseTransformer):
-    """Scalers whose transform is the affine pair: y = (x - center) / scale."""
+    """Scalers whose transform is the affine pair: y = (x - center) / scale.
+
+    States carry *statistics* — the entries people think in (``mean``,
+    ``std``); ``PAIR`` maps the affine *roles* onto those entries. A role
+    with no entry (divisive scalers have no center) defaults to ``0.0``.
+    The composed affine *view* (:meth:`affine_view`) always carries both
+    roles, so downstream contracts (``affine()``, ``unscale()``) stay total.
+    """
+
+    PAIR: ClassVar[dict[str, str]] = {"center": "center", "scale": "scale"}
+
+    @classmethod
+    def _entry(
+        cls, state: Mapping[str, xr.DataArray] | xr.Dataset, role: str
+    ) -> Any:
+        entry = cls.PAIR.get(role)
+        if entry is None or entry not in state:
+            if role == "scale":
+                raise KeyError(f"no {entry!r} entry for the scale role in {sorted(map(str, state))}")
+            return xr.DataArray(0.0)          # center: additive identity
+        return state[entry]
 
     def _transform(
         self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
@@ -177,7 +288,7 @@ class BaseAffineTransformer(BaseTransformer):
         from .binding import lift_state_if_symbolic
 
         state = lift_state_if_symbolic(X, state)
-        return (X - state["center"]) / state["scale"]
+        return (X - self._entry(state, "center")) / self._entry(state, "scale")
 
     def _inverse_transform(
         self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
@@ -185,15 +296,32 @@ class BaseAffineTransformer(BaseTransformer):
         from .binding import lift_state_if_symbolic
 
         state = lift_state_if_symbolic(X, state)
-        return X * state["scale"] + state["center"]
+        return X * self._entry(state, "scale") + self._entry(state, "center")
 
-    def affine_view(self, state: Mapping[str, xr.DataArray]) -> Mapping[str, Any]:
-        return state
+    def affine_view(self, state: Mapping[str, xr.DataArray]) -> dict[str, Any]:
+        """The composed affine roles for this scaler's state — always total."""
+        return {"center": self._entry(state, "center"), "scale": self._entry(state, "scale")}
 
 
-def affine_pair(state: Mapping[str, xr.DataArray]) -> dict[str, Any]:
-    """The (center, scale) pair of a fitted affine state."""
-    return {"center": state["center"], "scale": state["scale"]}
+def affine_pair(
+    state: Mapping[str, xr.DataArray], transformer: BaseAffineTransformer | None = None
+) -> dict[str, Any]:
+    """The (center, scale) roles of a fitted affine state.
+
+    States carry *statistics*; the role mapping lives on the scaler class
+    (``PAIR``), so pass the transformer for states whose entries are not
+    literally ``center``/``scale``. A missing center role defaults to 0.0
+    (divisive scalers).
+    """
+    if transformer is None:
+        return {
+            "center": state["center"] if "center" in state else xr.DataArray(0.0),
+            "scale": state["scale"],
+        }
+    return {
+        "center": transformer._entry(state, "center"),
+        "scale": transformer._entry(state, "scale"),
+    }
 
 
 def to_spec(transformer: Any) -> dict[str, Any]:

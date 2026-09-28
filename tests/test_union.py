@@ -21,8 +21,8 @@ def _branch_digital():
     return make_pipeline(
         Derive(
             name="level_vs_reference",
-            numerator=("controls", {"control": "level"}),
-            denominator=("controls", {"control": "reference"}),
+            left=("controls", {"control": "level"}),
+            right=("controls", {"control": "reference"}),
             op="ratio",
         ),
         Func({"level_vs_reference": "log"}),
@@ -34,8 +34,8 @@ def _branch_seasonality():
     return make_pipeline(
         Derive(
             name="level_vs_seasonality",
-            numerator=("controls", {"control": "level"}),
-            denominator=("controls", {"control": "seasonality"}),
+            left=("controls", {"control": "level"}),
+            right=("controls", {"control": "seasonality"}),
             op="ratio",
         ),
         Func({"level_vs_seasonality": "log"}),
@@ -51,8 +51,8 @@ def _linear_reference():
                 "rel_comp",
                 Derive(
                     name="level_vs_reference",
-                    numerator=("controls", {"control": "level"}),
-                    denominator=("controls", {"control": "reference"}),
+                    left=("controls", {"control": "level"}),
+                    right=("controls", {"control": "reference"}),
                     op="ratio",
                 ),
             ),
@@ -60,8 +60,8 @@ def _linear_reference():
                 "rel_infl",
                 Derive(
                     name="level_vs_seasonality",
-                    numerator=("controls", {"control": "level"}),
-                    denominator=("controls", {"control": "seasonality"}),
+                    left=("controls", {"control": "level"}),
+                    right=("controls", {"control": "seasonality"}),
                     op="ratio",
                 ),
             ),

@@ -42,11 +42,12 @@ class TestFixedScaler:
 
 
 class TestZScore:
-    def test_center_is_mean_scale_is_std(self, national_ds):
+    def test_state_carries_mean_and_std(self, national_ds):
         da = national_ds["target"]
         state = ZScore(dims=("date",)).fit(da)
-        assert np.isclose(float(state["center"].item()), da.mean("date").item())
-        assert np.isclose(float(state["scale"].item()), da.std("date", ddof=0).item())
+        assert set(state.data_vars) == {"mean", "std"}
+        assert np.isclose(float(state["mean"].item()), da.mean("date").item())
+        assert np.isclose(float(state["std"].item()), da.std("date", ddof=0).item())
 
     def test_sklearn_parity_flattened_standard_scaler(self, national_ds):
         from sklearn.preprocessing import StandardScaler
@@ -60,14 +61,14 @@ class TestZScore:
     def test_none_dims_reduces_all(self, national_ds):
         da = national_ds["target"]
         state = ZScore().fit(da)
-        assert float(state["center"].item()) == pytest.approx(da.mean("date").item())
-        assert float(state["scale"].item()) == pytest.approx(da.std("date", ddof=0).item())
+        assert float(state["mean"].item()) == pytest.approx(da.mean("date").item())
+        assert float(state["std"].item()) == pytest.approx(da.std("date", ddof=0).item())
 
     def test_kept_dims_carry_coords(self, mixed_grain_ds):
         da = mixed_grain_ds["media_digital"]  # (date, geo, media)
         state = ZScore(dims=("date",)).fit(da)
-        assert set(state["scale"].dims) == {"geo", "media"}
-        assert list(state["scale"]["geo"].values) == list(mixed_grain_ds.geo.values)
+        assert set(state["std"].dims) == {"geo", "media"}
+        assert list(state["std"]["geo"].values) == list(mixed_grain_ds.geo.values)
 
     def test_nan_handling_matches_sklearn(self, national_ds):
         from sklearn.preprocessing import StandardScaler
@@ -100,13 +101,13 @@ class TestMeanScaler:
         scaled = scaler.transform(da, state)
         assert np.allclose(scaled.values, da.values / da.mean("date").values)
 
-    def test_center_is_zero(self, national_ds):
+    def test_divisive_state_carries_mean_only(self, national_ds):
         state = MeanScaler(dims=("date",)).fit(national_ds["target"])
-        assert float(state["center"].item()) == 0.0
+        assert set(state.data_vars) == {"mean"}  # no center stored
 
     def test_kept_per_channel_scales(self, national_ds):
         state = MeanScaler(dims=("date",)).fit(national_ds["media"])
-        assert state["scale"].dims == ("channel",)
+        assert state["mean"].dims == ("channel",)
 
 
 class TestMutation:
@@ -115,7 +116,7 @@ class TestMutation:
         state = MeanScaler(dims=("date",)).fit(da)
         base = MeanScaler(dims=("date",)).transform(da, state)
         assert np.allclose(base.values, da.values / da.mean("date").values)
-        state["scale"] = state["scale"] * 2
+        state["mean"] = state["mean"] * 2
         after = MeanScaler(dims=("date",)).transform(da, state)
         assert np.allclose(after.values, (da.values / da.mean("date").values) / 2)
 
@@ -124,7 +125,7 @@ class TestMutation:
         scaler = ZScore(dims=("date",))
         state = scaler.fit(da)
         # store scale with dims transposed — transform must broadcast by dim name
-        state["scale"] = state["scale"].transpose("media", "geo")
+        state["std"] = state["std"].transpose("media", "geo")
         out = scaler.transform(da, state)
         expected = (da - da.mean("date")) / da.std("date", ddof=0)
         assert np.allclose(out.values, expected.values)
@@ -137,7 +138,7 @@ class TestDatasetInputDispatch:
         scaler = MeanScaler(dims=("date",))
         state = scaler.fit(mixed_grain_ds)
         assert hasattr(state, "get")
-        assert set(state.get("media_national")["scale"].dims) == {"media"}
+        assert set(state.get("media_national")["mean"].dims) == {"media"}
 
     def test_dataset_input_transforms_each_variable(self, mixed_grain_ds):
         scaler = MeanScaler(dims=("date",))

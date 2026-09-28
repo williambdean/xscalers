@@ -20,14 +20,16 @@ interest — read it before changing behavior.
    hide in attrs). Pipeline state is an `xr.DataTree` (leaf per variable,
    child per step) serializing with one `to_netcdf`. Never invent containers
    that Dataset/DataTree/InferenceData already cover.
-2. **Backend-agnostic core.** Scalers only ever read `state["center"]` /
-   `state["scale"]` — no `isinstance(state, Dataset)` branches, no coords in
-   core arithmetic, reductions over named dims only. `pytensor.xtensor`
+2. **Backend-agnostic core.** Scalers read state entries through their
+   `PAIR` role mapping (roles: `center`, `scale`; a missing center entry
+   defaults to `0.0` — divisive scalers store no center) — no
+   `isinstance(state, Dataset)` branches, no coords in core arithmetic,
+   reductions over named dims only. `pytensor.xtensor`
    variables have dims, never coords: anything coord-dependent pytest xtensor
    path skips it is xarray-only.
 3. **All v1 scalers are affine.** `y = (x - center) / scale`. The composed
-   `affine()` view is the contract consumers (pymc-marketing) bind to — an
-   MMM never needs to know which scaler kind produced the pair.
+   `affine()` view is the contract consumers (pymc-marketing) bind to — a
+   downstream model never needs to know which scaler kind produced the pair.
 4. **Explicit state, not hidden fit.** Unlike sklearn's `estimator.mean_`,
    the fitted values are passed around and can be inspected or edited. The
    one deliberate sklearn departure; documented in the README.
@@ -35,7 +37,7 @@ interest — read it before changing behavior.
    (`to_spec`/`from_spec`, zero-dep); fitted state serializes to netCDF
    artifacts (`state_tree.to_netcdf`). They never mix.
 6. **Shape-changing steps are honest.** `Splitter` is invertible (pieces are
-   DataTree child nodes; recombine = concat back). `Selector` and `Dropper`
+   DataTree child nodes; recombine = concat back). `Selector` and `VariableDropper`
    (and anything aggregation-like) are not — their `inverse_transform` raises
    rather than guessing. Aggregation/dedup stay upstream xarray ops
    (`resample`, `groupby`, `drop_duplicates`), outside the pipeline.
@@ -56,14 +58,17 @@ class BaseTransformer:
   need no special casing.
 - Canonical fitted state across a pipeline: `DataTree` with children per
   step, leaves per variable.
-- Keys: canonical learned-state names are `center` and `scale` (z-score's
-  `mean`/`std` map onto this affine pair).
+- Keys: states carry *statistics* named for what was fitted (`ZScore` →
+  `mean`/`std`, `MeanScaler` → `mean`, `FixedScaler` → `center`/`scale`);
+  the affine *roles* (`center`, `scale`) live in composed affine views
+  (`affine()`/`affine_view()`), which are always complete — a missing
+  center role is `0.0`.
 
 ## Module layout (mirrors sklearn)
 
 | xscalers | sklearn | holds |
 | --- | --- | --- |
-| `preprocessing` | `preprocessing` | `ZScore`, `MeanScaler`, `FixedScaler`, `Func`, `Derive`, `Splitter`, `Selector`, `Dropper` |
+| `preprocessing` | `preprocessing` | `ZScore`, `MeanScaler`, `FixedScaler`, `FunctionTransformer`, `Derive`, `Splitter`, `Selector`, `VariableDropper` |
 | `compose` | `compose` | `VariableTransformer` (the ColumnTransformer analog) |
 | `pipeline` | `pipeline` | `Pipeline`, `Union`, `make_pipeline`, `make_union` |
 | `datasets` | `datasets` | `load_national`, `load_mixed_grain`, `load_media_channels` |
@@ -87,7 +92,7 @@ import from the mirrored module the way sklearn users write sklearn.
 - **State is data** — save with native xarray IO: `state.to_netcdf(path)` /
   `xr.open_dataset(path)`; a whole pipeline is one artifact via `state_tree`
   (`xr.open_datatree` on the other side).
-- **zarr-alongside**: MMM inputs live in a big zarr store; `append_state(
+- **zarr-alongside**: inputs live in a big zarr store; `append_state(
   tree, store, group="scalers")` appends the state tree as zarr groups
   (upstream gap: `DataTree.to_zarr(group=...)` raises NotImplementedError),
   reading back with `xr.open_datatree(store, group="scalers")`. `mode="a"`
@@ -120,8 +125,8 @@ flagship cross-backend parity test passing before any refactor.
   apply one fitted transformation to new data: ``pipe["media"].transform(...)``.
 - ``make_pipeline(*steps)`` auto-names from transformer classes
   (``zscore``, ``zscore-1``, ...); ``"passthrough"`` is a valid step value;
-  ``VariableTransformer(..., default="drop")`` drops unmapped variables while
-  scaling the mapped ones, and ``Dropper(vars=..., labels=...)`` is the
+  ``VariableTransformer(..., remainder="drop")`` drops unmapped variables while
+  scaling the mapped ones, and ``VariableDropper(vars=..., labels=...)`` is the
   standalone drop verb (data-movement steps are not affine — see principle 6).
 
 ## Deferred (documented, not built)

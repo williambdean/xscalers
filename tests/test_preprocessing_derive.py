@@ -94,6 +94,18 @@ class TestSplitter:
         with pytest.raises(TypeError):
             pipe.affine(state)
 
+    def test_a_bare_label_string_means_one_label(self, split_tree):
+        """The way Selector/Derive accept ``{"media": "tv"}``: a bare string
+        must not be iterated per character."""
+        splitter = Splitter("media", {"tv": {"channel": "tv"}})
+        tree = splitter.transform(split_tree, splitter.fit(split_tree))
+        assert splitter.pieces == {"tv": {"channel": ["tv"]}}
+        assert list(tree.children["media"].children["tv"].dataset["tv"].channel.values) == ["tv"]
+
+    def test_a_bare_label_string_survives_the_spec_round_trip(self):
+        rebuilt = from_spec(to_spec(Splitter("media", {"tv": {"channel": "tv"}})))
+        assert rebuilt.pieces == {"tv": {"channel": ["tv"]}}
+
 
 class TestSelector:
     def test_select_within_a_coordinate(self, split_tree):
@@ -211,8 +223,8 @@ class TestDropper:
         raw variables downstream."""
         deriver = Derive(
             name="tv_per_control",
-            numerator=("media_national", {"media": "tv"}),
-            denominator=("controls_prod", {}),
+            left=("media_national", {"media": "tv"}),
+            right=("controls_prod", {}),
             op="ratio",
         )
         pipe = Pipeline(
@@ -257,8 +269,8 @@ class TestDerive:
     def _deriver(self):
         return Derive(
             name="level_ratio",
-            numerator=("controls", {"control": "level"}),
-            denominator=("controls", {"control": "reference"}),
+            left=("controls", {"control": "level"}),
+            right=("controls", {"control": "reference"}),
             op="ratio",
         )
 
@@ -276,8 +288,8 @@ class TestDerive:
         ds = mixed_grain_ds
         near = Derive(
             name="level_share",
-            numerator=("controls", {"control": ["level", "reference"]}),
-            denominator=("controls", {"control": "reference"}),
+            left=("controls", {"control": ["level", "reference"]}),
+            right=("controls", {"control": "reference"}),
             op="ratio",
             reduce="sum",
         )
@@ -293,8 +305,8 @@ class TestDerive:
         ds = mixed_grain_ds
         derive = Derive(
             name="level_only",
-            numerator=("controls", {"control": "level"}),
-            denominator=("controls", {"control": "reference"}),
+            left=("controls", {"control": "level"}),
+            right=("controls", {"control": "reference"}),
             op="ratio",
         )
         state = derive.fit(ds)
@@ -351,6 +363,186 @@ class TestDerive:
             assert np.allclose(back[var].values, mixed_grain_ds[var].values)
         assert "level_ratio" not in back.data_vars
 
+class TestDeriveThenPrune:
+    """The fit-pipeline handoff: derive a ratio across variables, then drop the
+    input the ratio supersedes so the downstream frame has one column per
+    concept. The prune is honest about being one-way, which is why scenarios
+    keep a second pipeline that stops before the Dropper."""
+
+    def _handoff(self):
+        return Pipeline(
+            [
+                (
+                    "ratio",
+                    Derive(
+                        name="level_index",
+                        left=("peer_level", {}),
+                        right=("level", {}),
+                        op="ratio",
+                    ),
+                ),
+                ("prune", Dropper(vars=["peer_level"])),
+            ]
+        )
+
+    def _multidim(self):
+        from xscalers.datasets import load_panel
+
+        return load_panel()
+
+    def test_model_input_carries_the_ratio_not_its_superseded_input(self):
+        pipe = self._handoff()
+        out = pipe.fit_transform(self._multidim())
+        assert "level_index" in out.data_vars
+        assert "peer_level" not in out.data_vars
+        assert "level" in out.data_vars  # the denominator stays
+        assert out["level_index"].dims == ("date", "product")
+
+    def test_the_handoff_is_one_way(self):
+        pipe = self._handoff()
+        ds = self._multidim()
+        state = pipe.fit(ds)
+        with pytest.raises(NonInvertibleError):
+            pipe.inverse_transform(pipe.transform(ds, state), state)
+
+    def test_a_scenario_pipeline_stops_before_the_prune(self):
+        """Same recipe, Dropper omitted: invertible, so it can drive what-ifs."""
+        scenario = Pipeline([step for step in self._handoff().steps if step[0] != "prune"])
+        ds = self._multidim()
+        state = scenario.fit(ds)
+        out = scenario.transform(ds, state)
+        back = scenario.inverse_transform(out, state)
+        assert "peer_level" in back.data_vars
+        for name in ("level", "peer_level"):
+            assert np.allclose(back[name].values, ds[name].values, equal_nan=True)
+
+
+class TestSplitDerivePruneScaleHandoff:
+    """The whole workflow in one pipeline: split a shared series into pieces,
+    derive an index from two variables, drop the input it supersedes, and
+    scale what remains. What comes out is the model-ready variable set, and
+    the state tree has one leaf per piece and per surviving variable."""
+
+    def _pipeline(self, *, prune=True):
+        steps = [
+            (
+                "split",
+                Splitter(
+                    "media_national",
+                    {"tv": {"channel": "tv"}, "ooh": {"channel": "ooh"}},
+                ),
+            ),
+            (
+                "index",
+                Derive(
+                    name="level_index",
+                    left=("peer_level", {}),
+                    right=("level", {}),
+                    op="ratio",
+                ),
+            ),
+            (
+                "scale",
+                VariableTransformer(
+                    {
+                        "media_national_tv": MeanScaler(dims=("date",)),
+                        "media_national_ooh": FixedScaler(scale=100.0),
+                        "level_index": MeanScaler(dims=("date",)),
+                    }
+                ),
+            ),
+        ]
+        if prune:
+            steps.insert(2, ("prune", Dropper(vars=["peer_level"])))
+        return Pipeline(steps)
+
+    def _raw(self):
+        from xscalers.datasets import load_panel
+
+        return load_panel()
+
+    def test_output_is_the_model_ready_variable_set(self):
+        pipe = self._pipeline()
+        out = pipe.fit_transform(self._raw())
+        assert set(out.data_vars) == {
+            "media_national_tv",
+            "media_national_ooh",
+            "media_digital",
+            "level",
+            "flag",
+            "share",
+            "peer_flag",
+            "level_index",
+            "target",
+        }
+        assert "media_national" not in out.data_vars
+        assert "peer_level" not in out.data_vars
+
+    def test_pieces_are_scaled_by_their_own_recipes(self):
+        raw = self._raw()
+        out = self._pipeline().fit_transform(raw)
+        # the source is (date, channel), so each piece keeps just the date
+        assert out["media_national_tv"].dims == ("date", "channel_tv")
+        tv = raw["media_national"].sel(channel="tv")
+        assert np.allclose(
+            out["media_national_tv"].squeeze("channel_tv").values,
+            (tv / tv.mean("date")).values,
+        )
+        ooh = raw["media_national"].sel(channel="ooh")
+        assert np.allclose(
+            out["media_national_ooh"].squeeze("channel_ooh").values, (ooh / 100.0).values
+        )
+
+    def test_state_tree_has_one_leaf_per_piece_and_surviving_variable(self):
+        from xscalers.container import state_tree
+
+        pipe = self._pipeline()
+        pipe.fit(self._raw())
+        tree = state_tree(pipe.states_)
+        assert set(tree.groups) >= {
+            "/split",
+            "/index",
+            "/prune",
+            "/scale",
+            "/scale/media_national_tv",
+            "/scale/media_national_ooh",
+            "/scale/level_index",
+        }
+        # one leaf per piece, and the derived variable, each keeping its own
+        # grain: a length-1 piece coord for the channel split, product grain
+        # for the derived index
+        assert tree["scale/media_national_tv"]["mean"].dims == ("channel_tv",)
+        assert tree["scale/level_index"]["mean"].dims == ("product",)
+
+    def test_the_pruned_pipeline_is_one_way(self):
+        pipe = self._pipeline()
+        raw = self._raw()
+        state = pipe.fit(raw)
+        with pytest.raises(NonInvertibleError):
+            pipe.inverse_transform(pipe.transform(raw, state), state)
+
+    def test_the_scenario_pipeline_inverts_back_to_the_derived_inputs(self):
+        """No prune: the same recipes, and the round trip is honest."""
+        pipe = self._pipeline(prune=False)
+        raw = self._raw()
+        out = pipe.fit_transform(raw)
+        back = pipe.inverse_transform(out, pipe.states_)
+        assert "peer_level" in back.data_vars
+        # the inverse drops what Derive created and leaves its inputs alone
+        assert "level_index" not in back.data_vars
+        assert np.allclose(back["level"].values, raw["level"].values)
+        assert np.allclose(back["peer_level"].values, raw["peer_level"].values)
+        # Splitter is invertible, so the pieces recombine into the source,
+        # with the original channel coord and order
+        assert "media_national" in back.data_vars
+        assert back["media_national"].dims == ("date", "channel")
+        assert list(back["media_national"].coords["channel"].values) == [
+            "tv",
+            "ooh",
+        ]
+        assert np.allclose(back["media_national"].values, raw["media_national"].values)
+
+
 class TestDeriveDogfood:
     """Two log-ratio derivations from the (date, product, control) controls:
     log(level / reference) and log(level / seasonality), then z-scored."""
@@ -362,8 +554,8 @@ class TestDeriveDogfood:
                     "derive_level_reference",
                     Derive(
                         name="level_vs_reference",
-                        numerator=("controls", {"control": "level"}),
-                        denominator=("controls", {"control": "reference"}),
+                        left=("controls", {"control": "level"}),
+                        right=("controls", {"control": "reference"}),
                         op="ratio",
                     ),
                 ),
@@ -371,8 +563,8 @@ class TestDeriveDogfood:
                     "derive_level_seasonality",
                     Derive(
                         name="level_vs_seasonality",
-                        numerator=("controls", {"control": "level"}),
-                        denominator=("controls", {"control": "seasonality"}),
+                        left=("controls", {"control": "level"}),
+                        right=("controls", {"control": "seasonality"}),
                         op="ratio",
                     ),
                 ),

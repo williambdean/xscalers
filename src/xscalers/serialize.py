@@ -10,6 +10,12 @@ __all__ = ["from_spec", "spec_of", "to_spec"]
 
 def to_spec(transformer: Any) -> dict[str, Any]:
     """Serialize a transformer recipe to a plain dict (JSON-serializable)."""
+    # containers (Pipeline, Union) override ``to_spec`` with a nested spec of
+    # their children and have no to_spec_kwargs -- from_spec understands those
+    # kinds, so ask them. Leaves follow the to_spec_kwargs protocol below.
+    override = type(transformer).__dict__.get("to_spec")
+    if override is not None and not hasattr(type(transformer), "to_spec_kwargs"):
+        return override(transformer)
     kwargs = {
         k: (_spec_value(v)) for k, v in transformer.to_spec_kwargs().items()
     }
@@ -39,6 +45,10 @@ def from_spec(spec: Mapping[str, Any]) -> Any:
         from .pipeline import Pipeline
 
         return Pipeline.from_spec(spec)
+    if kind == "Union":
+        from .pipeline import Union
+
+        return Union.from_spec(spec)
     if kind not in REGISTRY:
         raise ValueError(f"Unknown transformer kind {kind!r}. Known: {sorted(REGISTRY)}")
     cls = REGISTRY[kind]

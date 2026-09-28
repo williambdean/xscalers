@@ -13,7 +13,8 @@ keywords = [
     "preprocessing",
     "pymc",
     "pytensor",
-    "marketing-mix-models",
+    "panel-data",
+    "time-series",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

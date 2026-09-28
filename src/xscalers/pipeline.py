@@ -3,8 +3,8 @@
 ``Pipeline.fit`` collects each step's state as it transforms its way down;
 ``inverse_transform`` runs the chain backwards against the same states.
 ``affine`` composes each step's affine pair per variable — the contract
-pymc-marketing consumes — and *refuses* pipelines that include non-affine
-steps rather than silently returning a wrong pair. The whole fitted state is
+downstream graph builders consume — and *refuses* pipelines that include
+non-affine steps rather than silently returning a wrong pair. The whole fitted state is
 one netCDF artifact via ``state_tree``.
 
 Ergonomics: ``pipe["name"]`` yields a *bound* step (transformer + its fitted
@@ -341,6 +341,84 @@ class Union:
         if key not in steps:
             raise KeyError(f"No branch named {key!r}. Branches: {sorted(steps)}")
         return BoundStep(key, steps[key], self.states_[key])
+
+    # -- affine / real-units conversion --------------------------------------
+
+    def affine(self, state: Mapping[str, Any]) -> dict[str, xr.Dataset]:
+        """Composed (center, scale) per variable, resolved across branches.
+
+        A variable owned by exactly one affine branch gets that branch's
+        composed pair. A variable appearing under several branches is
+        arbitrated by ``self.collisions`` exactly as in ``transform``:
+        values must agree (or ``keep_first`` wins); genuinely conflicting
+        pairs raise naming the branches. A branch that is not affine makes
+        the whole call raise, naming the branch — runs the same
+        "refuse rather than return a wrong pair" policy as
+        :meth:`Pipeline.affine`, per variable rather than per structure.
+        """
+
+        composed: dict[str, xr.Dataset] = {}
+        owners: dict[str, str] = {}
+        for (name, branch), branch_state in zip(self.branches, state.values(), strict=True):
+            # a branch is either a leaf scaler (affine_view) or a composite
+            # (Pipeline/Union with its own affine()) — resolve either
+            view = getattr(branch, "affine_view", None)
+            if view is not None:
+                branch_pairs = view(branch_state)
+            elif hasattr(branch, "affine"):
+                branch_pairs = branch.affine(branch_state)
+            else:
+                raise TypeError(
+                    f"Union branch {name!r} ({type(branch).__name__}) is not "
+                    "affine; the composed affine view is undefined"
+                )
+            for key, pair in branch_pairs.items():
+                if key in composed:
+                    prev = composed[key]
+                    same = (
+                        self.collisions == "keep_first"
+                        or (
+                            pair["center"].identical(prev["center"])
+                            and pair["scale"].identical(prev["scale"])
+                        )
+                    )
+                    if not same:
+                        raise ValueError(
+                            f"Union branches {owners[key]!r} and {name!r} produce "
+                            f"conflicting affine pairs for variable {key!r} "
+                            f"(collisions={self.collisions!r})"
+                        )
+                    continue
+                composed[key] = xr.Dataset(
+                    {"center": pair["center"], "scale": pair["scale"]}
+                )
+                owners[key] = name
+        return composed
+
+    def unscale(self, x: Any, *, var: str, state: Mapping[str, Any] | None = None) -> Any:
+        """Convert a scaled-space value of ``var`` back into real units.
+
+        Same verb, same semantics as :meth:`Pipeline.unscale`: the composed
+        affine pair from :meth:`affine` for variables owned by affine
+        branches. Variables whose owning branch is not affine raise, naming
+        the workaround (per-branch inverse) rather than guessing.
+        """
+        chosen = state if state is not None else self.states_
+        if chosen is None:
+            raise RuntimeError(
+                "Union has no fitted state; pass state=<state> or bind one"
+            )
+        try:
+            pair = self.affine(chosen)[var]
+        except KeyError as err:
+            raise KeyError(
+                f"No data variable named {var!r} in the union's affine view; "
+                "branches must contain affine scalers for this variable"
+            ) from err
+        from .binding import lift_state_if_symbolic
+
+        pair_lifted = lift_state_if_symbolic(x, pair)
+        return x * pair_lifted["scale"] + pair_lifted["center"]
 
     # -- spec serialization ----------------------------------------------------
 

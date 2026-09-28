@@ -18,28 +18,32 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import xarray as xr
 
 from .container import flatten, reassemble
 from .core import (
+    REGISTRY,
     BaseAffineTransformer,
     BaseTransformer,
     NonInvertibleError,
+    _stamp_state,
     as_state,
     register,
 )
 
 __all__ = [
     "Derive",
-    "Dropper",
+    "Dropper",   # deprecated alias of VariableDropper
     "FixedScaler",
-    "Func",
+    "Func",      # deprecated alias of FunctionTransformer
+    "FunctionTransformer",
     "MeanScaler",
     "Selector",
     "Splitter",
+    "VariableDropper",
     "ZScore",
 ]
 
@@ -55,7 +59,7 @@ _FUNC_INVERSES: dict[str, str] = {
 
 
 @register
-class Func(BaseTransformer):
+class FunctionTransformer(BaseTransformer):
     """Named elementwise transform per variable — non-affine on purpose.
 
     The second half of the "ratio, then log" chain: after a ``Derive`` step
@@ -112,7 +116,7 @@ class FixedScaler(BaseAffineTransformer):
     """Constant affine pair — scale by a fixed amount (e.g. scale by 100).
 
     No data-derived stats: ``compute`` returns constants, so the same object
-    works as pymc-marketing's ``FixedScaling``.
+    also serves as a consumer's fixed-scale contract.
     """
 
     def __init__(self, scale: float = 100.0, center: float = 0.0):
@@ -131,50 +135,63 @@ class FixedScaler(BaseAffineTransformer):
 
 
 class _DataDerivedScaler(BaseAffineTransformer):
-    """Shared plumbing: compute affine stats from data over the reduce dims."""
+    """Shared plumbing: compute affine stats from data over the reduce dims.
+
+    States carry the *statistics* (entry names people think in — ``mean``,
+    ``std``); ``PAIR`` maps the affine roles onto them, and a missing role
+    entry defaults to ``0.0`` in the arithmetic (divisive scalers).
+    """
 
     kind: str
+    PAIR: ClassVar[dict[str, str]] = {"center": "center", "scale": "scale"}
 
     def to_spec_kwargs(self) -> dict[str, Any]:
         return {"dims": self.dims}
 
-    def _stats(self, da: Any) -> tuple[Any, Any]:
+    def _stats(self, da: Any) -> dict[str, Any]:
         raise NotImplementedError
 
     def compute(self, X: Any) -> xr.Dataset:
         scaled_from = getattr(X, "name", None)
-        center, scale = self._stats(X)
-        return as_state(self.kind, self.dims, scaled_from, center=center, scale=scale)
+        return as_state(self.kind, self.dims, scaled_from, **self._stats(X))
 
 
 @register
 class ZScore(_DataDerivedScaler):
-    """Standardize along the reduce dims: center = mean, scale = std (ddof=0).
+    """Standardize along the reduce dims: mean and std (ddof=0).
 
-    Matches sklearn's ``StandardScaler`` when the kept dim is the feature axis.
-    NaNs are skipped in the statistics.
+    Matches sklearn's ``StandardScaler`` (which stores ``mean_``/``scale_``)
+    when the kept dim is the feature axis. NaNs are skipped in the
+    statistics. The affine roles map center→mean, scale→std.
     """
 
     kind = "zscore"
+    PAIR: ClassVar[dict[str, str]] = {"center": "mean", "scale": "std"}
 
-    def _stats(self, da: Any):
+    def _stats(self, da: Any) -> dict[str, Any]:
         dims = self._reduce_dims(da)
-        center = da.mean(dim=dims, skipna=True)
-        scale = da.std(dim=dims, ddof=0, skipna=True)
-        return center, scale
+        return {
+            "mean": da.mean(dim=dims, skipna=True),
+            "std": da.std(dim=dims, ddof=0, skipna=True),
+        }
 
 
 @register
 class MeanScaler(_DataDerivedScaler):
-    """Divide by the mean along the reduce dims: center = 0, scale = mean."""
+    """Divide by the mean along the reduce dims — pure ``x / x.mean(dim)``.
+
+    Divisive: the state carries the fitted ``mean`` only; the affine
+    arithmetic supplies ``center = 0`` by default, so the composed view is
+    ``(0, mean)``. NaNs in the mean are filled with 0.0 (scale 0 → transform
+    yields 0, matching upstream mean-scaling conventions).
+    """
 
     kind = "mean"
+    PAIR: ClassVar[dict[str, str]] = {"scale": "mean"}
 
-    def _stats(self, da: Any):
+    def _stats(self, da: Any) -> dict[str, Any]:
         dims = self._reduce_dims(da)
-        center = xr.DataArray(0.0)
-        scale = da.mean(dim=dims, skipna=True)
-        return center, scale
+        return {"mean": da.mean(dim=dims, skipna=True)}
 
 
 def _positions(labels: Any, values: list[Any]) -> np.ndarray:
@@ -214,7 +231,9 @@ class Splitter:
 
     def __init__(self, source: str, pieces: Mapping[str, Mapping[str, Any]]):
         self.source = source
-        self.pieces = dict(pieces)
+        # a bare label string means one label, the way Selector/Derive accept
+        # ``{"media": "tv"}`` — otherwise a str would be iterated per character
+        self.pieces = {piece: dict(self._labels(sel)) for piece, sel in pieces.items()}
         split_dims = {dim for sel in self.pieces.values() for dim in sel}
         if len(split_dims) != 1:
             raise ValueError(
@@ -222,20 +241,18 @@ class Splitter:
             )
         self.split_dim = next(iter(split_dims))
 
+    @staticmethod
+    def _labels(sel: Mapping[str, Any]) -> dict[str, list[Any]]:
+        return {
+            dim: [value] if isinstance(value, str) else list(value)
+            for dim, value in sel.items()
+        }
+
     def to_spec_kwargs(self) -> dict[str, Any]:
         return {
             "source": self.source,
-            "pieces": {
-                piece: {dim: self._jsonable(value) for dim, value in sel.items()}
-                for piece, sel in self.pieces.items()
-            },
+            "pieces": {piece: dict(sel) for piece, sel in self.pieces.items()},
         }
-
-    @staticmethod
-    def _jsonable(value: Any) -> Any:
-        if isinstance(value, tuple):
-            return list(value)
-        return value
 
     # -- transformer API ---------------------------------------------------
 
@@ -252,16 +269,18 @@ class Splitter:
             f"labels_{self.split_dim}": xr.DataArray(labels, dims=("labels_index",))
         }
         for piece, sel in self.pieces.items():
-            values = self._jsonable(sel[self.split_dim])
             entries[f"positions_{piece}"] = xr.DataArray(
-                _positions(labels, values), dims=(f"index_{piece}",)
+                _positions(labels, sel[self.split_dim]), dims=(f"index_{piece}",)
             )
-        return as_state(
-            "splitter",
-            None,
-            scaled_from=self.source,
-            attrs={"source": self.source, "split_dim": self.split_dim, "pieces": sorted(self.pieces)},
-            **entries,
+        return _stamp_state(
+            as_state(
+                "splitter",
+                None,
+                scaled_from=self.source,
+                attrs={"source": self.source, "split_dim": self.split_dim, "pieces": sorted(self.pieces)},
+                **entries,
+            ),
+            self,
         )
 
     def transform(self, X: xr.DataTree | xr.Dataset, state: xr.Dataset):
@@ -340,8 +359,8 @@ class Derive:
 
         Derive(
             name="tv_per_control",
-            numerator=("media_national", {"media": "tv"}),
-            denominator=("controls_prod", {}),
+            left=("media_national", {"media": "tv"}),
+            right=("controls_prod", {}),
             op="ratio",
         )
 
@@ -350,8 +369,8 @@ class Derive:
 
         Derive(
             name="level_ratio",
-            numerator=("controls", {"control": "level"}),
-            denominator=("controls", {"control": "reference"}),
+            left=("controls", {"control": "level"}),
+            right=("controls", {"control": "reference"}),
             op="ratio",
         )
 
@@ -370,20 +389,33 @@ class Derive:
     def __init__(
         self,
         name: str,
-        numerator: tuple[str, Mapping[str, Any]],
+        left: tuple[str, Mapping[str, Any]] | None = None,
+        right: tuple[str, Mapping[str, Any]] | None = None,
+        *,
+        numerator: tuple[str, Mapping[str, Any]] | None = None,
         denominator: tuple[str, Mapping[str, Any]] | None = None,
         op: str = "ratio",
         reduce: str | None = None,
     ):
+        """``left op right`` — neutral names over the closed op vocabulary.
+
+        ``numerator``/``denominator`` are deprecated aliases (they only
+        describe ``op="ratio"``); they still load so existing specs and
+        call sites keep working.
+        """
+        if numerator is not None:
+            left = numerator
+        if denominator is not None:
+            right = denominator
         if op not in {"ratio", "diff", "product"}:
             raise ValueError(f"Derive ops are ratio | diff | product; got {op!r}")
-        if denominator is None:
-            raise ValueError(f"Derive op={op!r} needs a denominator piece")
+        if right is None:
+            raise ValueError(f"Derive op={op!r} needs a right piece")
         if reduce is not None and reduce not in {"sum", "mean", "first", "last"}:
             raise ValueError(f"unsupported reduce {reduce!r}; use sum | mean | first | last")
         self.name: str = name
-        self.numerator = self._normalize_piece(numerator)
-        self.denominator = self._normalize_piece(denominator)
+        self.left = self._normalize_piece(left)
+        self.right = self._normalize_piece(right)
         self.op = op
         self.reduce = reduce
 
@@ -397,9 +429,9 @@ class Derive:
     def to_spec_kwargs(self) -> dict[str, Any]:
         return {
             "name": self.name,
-            "numerator": {"var": self.numerator[0], "sel": self._jsonable_sel(self.numerator[1])},
-            "denominator": None if self.denominator is None else {
-                "var": self.denominator[0], "sel": self._jsonable_sel(self.denominator[1])
+            "left": {"var": self.left[0], "sel": self._jsonable_sel(self.left[1])},
+            "right": None if self.right is None else {
+                "var": self.right[0], "sel": self._jsonable_sel(self.right[1])
             },
             "op": self.op,
             "reduce": self.reduce,
@@ -444,7 +476,7 @@ class Derive:
     def fit(self, X: Any) -> xr.Dataset:
         if not isinstance(X, xr.Dataset):
             raise TypeError("Derive works on Dataset inputs (DataTree derivation deferred)")
-        for piece in (self.numerator, self.denominator):
+        for piece in (self.left, self.right):
             if piece is None:
                 continue
             var = piece[0]
@@ -453,22 +485,25 @@ class Derive:
         derived = self.name
         if X is not None and derived in X.data_vars:
             raise ValueError(f"Derived variable name {derived!r} already exists")
-        return as_state(
-            "derive",
-            None,
-            scaled_from=None,
-            attrs={
-                "derived": self.name,
-                "op": self.op,
-                "reduce": self.reduce or "" ,
-            },
+        return _stamp_state(
+            as_state(
+                "derive",
+                None,
+                scaled_from=None,
+                attrs={
+                    "derived": self.name,
+                    "op": self.op,
+                    "reduce": self.reduce or "" ,
+                },
+            ),
+            self,
         )
 
     def transform(self, X: Any, state: xr.Dataset) -> Any:
         if not isinstance(X, xr.Dataset):
             raise TypeError("Derive works on Dataset inputs")
-        first = self._piece(X, self.numerator)
-        second = self._piece(X, self.denominator)
+        first = self._piece(X, self.left)
+        second = self._piece(X, self.right)
         if self.op == "ratio":
             derived = first / second
         elif self.op == "diff":
@@ -502,7 +537,7 @@ class Selector:
         }
 
     def fit(self, X: Any) -> xr.Dataset:
-        return as_state("selector", None, scaled_from=None)
+        return _stamp_state(as_state("selector", None, scaled_from=None), self)
 
     def transform(self, X: Any, state: xr.Dataset) -> Any:
         out = {}
@@ -521,7 +556,7 @@ class Selector:
 
 
 @register
-class Dropper:
+class VariableDropper:
     """Drop whole variables and/or coordinate values. Dropping is NOT
     invertible.
 
@@ -537,7 +572,7 @@ class Dropper:
     supersedes them::
 
         Pipeline([
-            ("derive", Derive(name="ratio", numerator=..., denominator=...)),
+            ("derive", Derive(name="tv_per_control", left=..., right=..., op="ratio")),
             ("prune", Dropper(vars=["media", "controls"])),
         ])
 
@@ -587,14 +622,17 @@ class Dropper:
             raise ValueError(f"Dropping {self.vars} would result in an empty dataset")
         # JSON strings, not dicts: state attrs must survive to_netcdf (the
         # whole drop recipe lives in the spec; this copy is for auditing)
-        return as_state(
-            "drop",
-            None,
-            scaled_from=None,
-            attrs={
-                "dropped_vars": json.dumps(self.vars),
-                "dropped_labels": json.dumps(self.labels),
-            },
+        return _stamp_state(
+            as_state(
+                "drop",
+                None,
+                scaled_from=None,
+                attrs={
+                    "dropped_vars": json.dumps(self.vars),
+                    "dropped_labels": json.dumps(self.labels),
+                },
+            ),
+            self,
         )
 
     def transform(self, X: Any, state: xr.Dataset) -> Any:
@@ -613,9 +651,48 @@ class Dropper:
         )
 
 
+@register
+class Renamer:
+    """Rename variables in a Dataset. Invertible (reverse the mapping).
+
+    Maps directly to ``xr.Dataset.rename()``. Config form::
+
+        - rename: {old_name: new_name, ...}
+    """
+
+    def __init__(self, mapping: dict[str, str]):
+        self.mapping = dict(mapping)
+
+    def fit(self, X: Any) -> xr.Dataset:
+        return _stamp_state(
+            as_state(
+                "rename", None, scaled_from=None,
+                attrs={"mapping": json.dumps(self.mapping)},
+            ),
+            self,
+        )
+
+    def transform(self, X: Any, state: Any) -> Any:
+        return X.rename(self.mapping)
+
+    def inverse_transform(self, X: Any, state: Any) -> Any:
+        reverse = {v: k for k, v in self.mapping.items()}
+        return X.rename(reverse)
+
+    def to_spec_kwargs(self) -> dict[str, Any]:
+        return {"mapping": dict(self.mapping)}
+
+
 def var_of(node: xr.DataTree) -> str:
     """Sole variable name of a node's dataset (single-var nodes assumed)."""
     vars_ = list(node.dataset.data_vars)
     if len(vars_) != 1:
         raise ValueError(f"Node {node.path!r} must hold exactly one variable; has {vars_}")
     return str(vars_[0])
+
+
+# Compat: old class names stay importable and loadable from existing specs.
+Dropper = VariableDropper
+Func = FunctionTransformer
+REGISTRY["Dropper"] = VariableDropper
+REGISTRY["Func"] = FunctionTransformer

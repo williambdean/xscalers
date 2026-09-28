@@ -22,10 +22,22 @@ from .core import (
     as_state,
     register,
 )
-from .datasets import load_media_channels, load_mixed_grain, load_national
+from .datasets import load_media_channels, load_mixed_grain, load_national, load_panel
 from .persistence import append_state
 from .pipeline import BoundStep, Pipeline, Union, make_pipeline, make_union
-from .preprocessing import Derive, Dropper, FixedScaler, Func, MeanScaler, Selector, Splitter, ZScore
+from .preprocessing import (
+    Derive,
+    Dropper,
+    FixedScaler,
+    Func,
+    FunctionTransformer,
+    MeanScaler,
+    Renamer,
+    Selector,
+    Splitter,
+    VariableDropper,
+    ZScore,
+)
 from .serialize import from_spec, to_spec
 
 __all__ = [
@@ -37,12 +49,15 @@ __all__ = [
     "Dropper",
     "FixedScaler",
     "Func",
+    "FunctionTransformer",
     "MeanScaler",
     "NonInvertibleError",
     "Pipeline",
+    "Renamer",
     "Selector",
     "Splitter",
     "Union",
+    "VariableDropper",
     "VariableTransformer",
     "ZScore",
     "affine_pair",
@@ -55,6 +70,7 @@ __all__ = [
     "load_media_channels",
     "load_mixed_grain",
     "load_national",
+    "load_panel",
     "make_pipeline",
     "make_union",
     "reassemble",

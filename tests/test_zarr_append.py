@@ -46,8 +46,8 @@ class TestZarrAppend:
     def test_pipeline_state_appends_into_existing_store(self, tmp_path):
         """Fit on xarray, append into the store's 'scalers' group, read back natively."""
         ds = load_national()
-        store = tmp_path / "mmm.zarr"
-        ds.to_zarr(store)  # the "larger MMM input" store existing first
+        store = tmp_path / "inputs.zarr"
+        ds.to_zarr(store)  # the "larger input" store existing first
 
         pipe = Pipeline([("scale", VariableTransformer({"target": MeanScaler(dims=("date",))}))])
         state = pipe.fit(ds)

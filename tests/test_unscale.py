@@ -24,10 +24,8 @@ class TestUnscaleAffine:
         pipe.fit(national_ds)
 
         contrib = xr.DataArray(np.full((2, 5, 104, 3), 0.25), dims=("chain", "draw", "date", "channel"))
-        expected = (
-            contrib * pipe["scale"].state["media"]["scale"]
-            + pipe["scale"].state["media"]["center"]
-        )
+        pair = pipe.affine(pipe.states_)["media"]
+        expected = contrib * pair["scale"] + pair["center"]
         out = pipe.unscale(contrib, var="media")
         assert np.allclose(out.values, expected.values)
 
@@ -68,8 +66,8 @@ class TestUnscaleNonAffineFallback:
                     "derive",
                     Derive(
                         name="level_rel_reference",
-                        numerator=("controls", {"control": "level"}),
-                        denominator=("controls", {"control": "reference"}),
+                        left=("controls", {"control": "level"}),
+                        right=("controls", {"control": "reference"}),
                         op="ratio",
                     ),
                 ),

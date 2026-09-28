@@ -28,7 +28,7 @@ class TestPipeline:
         assert set(state) == {"target", "media"}
         # composite steps contribute one level of nesting: step → variable → state
         assert np.isclose(
-            float(state["target"]["target"]["scale"].item()),
+            float(state["target"]["target"]["std"].item()),
             national_ds["target"].std("date", ddof=0).item(),
         )
 
@@ -83,6 +83,47 @@ class TestAffine:
         direct = pipe.inverse_transform(xr.Dataset({"target": contrib}), state)
         expected = contrib * view["target"]["scale"] + view["target"]["center"]
         assert np.allclose(direct["target"].values, expected.values)
+
+    def test_two_steps_on_one_variable_compose(self, mixed_grain_ds):
+        """The per-variable composition math, across steps: two affine steps
+        on the *same* variable must collapse to one pair."""
+        pipe = Pipeline(
+            [
+                ("mean", VariableTransformer({"media_national": preprocessing.MeanScaler(dims=("date",))})),
+                ("z", VariableTransformer({"media_national": preprocessing.ZScore(dims=("date",))})),
+            ]
+        )
+        state = pipe.fit(mixed_grain_ds)
+        pair = pipe.affine(state)["media_national"]
+        out = pipe.transform(mixed_grain_ds, state)["media_national"]
+
+        first = pipe["mean"].transformer.affine_view(pipe["mean"].state)["media_national"]
+        second = pipe["z"].transformer.affine_view(pipe["z"].state)["media_national"]
+        # y2 = (y1 - c2)/s2 with y1 = (x - c1)/s1
+        assert np.allclose(pair["center"], (first["center"] + first["scale"] * second["center"]).values)
+        assert np.allclose(pair["scale"], (first["scale"] * second["scale"]).values)
+        # ... and that single pair is what the pipeline actually did
+        by_hand = (mixed_grain_ds["media_national"] - pair["center"]) / pair["scale"]
+        assert np.allclose(by_hand.transpose(*out.dims).values, out.values)
+        # the composed pair is at the coarser grain, not the intermediate one
+        assert pair["scale"].dims == ("media",)
+
+    def test_unscale_matches_the_composed_pair_for_a_shared_variable(self, mixed_grain_ds):
+        pipe = Pipeline(
+            [
+                ("mean", VariableTransformer({"media_national": preprocessing.MeanScaler(dims=("date",))})),
+                ("z", VariableTransformer({"media_national": preprocessing.ZScore(dims=("date",))})),
+            ]
+        )
+        state = pipe.fit(mixed_grain_ds)
+        scaled = pipe.transform(mixed_grain_ds, state)["media_national"]
+        contrib = xr.zeros_like(scaled) + 0.25
+        back = pipe.unscale(
+            xr.Dataset({"media_national": contrib}), var="media_national", state=state
+        )
+        pair = pipe.affine(state)["media_national"]
+        expected = contrib * pair["scale"] + pair["center"]
+        assert np.allclose(back["media_national"].values, expected.values)
 
     def test_affine_raises_for_non_affine_steps(self, national_ds):
         pipeline = Pipeline([("shape", NonAffineStep()), ("scale", _make())])
@@ -166,6 +207,71 @@ class TestPassthroughSteps:
         back = pipeline.inverse_transform(pipeline.transform(national_ds, state), state)
         for var in national_ds.data_vars:
             assert np.allclose(back[var].values, national_ds[var].values)
+
+
+class TestFittedStateAsCounterfactualBasis:
+    """The scenario-analysis contract: fit once, then transform many perturbed
+    copies of the raw data with the same state. Every counterfactual is scaled
+    by the fit-time numbers, only the perturbed variable moves, and the step is
+    pure -- no refit, no hidden state."""
+
+    def test_one_state_serves_many_perturbations(self, mixed_grain_ds):
+        pipe = Pipeline(
+            [
+                (
+                    "scale",
+                    VariableTransformer(
+                        {
+                            "media_national": preprocessing.MeanScaler(dims=("date",)),
+                            "controls_prod": preprocessing.ZScore(dims=("date",)),
+                        }
+                    ),
+                )
+            ]
+        )
+        state = pipe.fit(mixed_grain_ds)
+        base = pipe.transform(mixed_grain_ds, state)
+
+        bumped = mixed_grain_ds.copy(deep=True)
+        bumped["media_national"] = bumped["media_national"] * 1.10
+        out = pipe.transform(bumped, state)
+
+        # the perturbed variable moved, and by the same 10%
+        assert np.allclose(
+            out["media_national"].values, base["media_national"].values * 1.10
+        )
+        # every other variable is bit-identical to the unperturbed run
+        for name in base.data_vars:
+            if name != "media_national":
+                assert out[name].identical(base[name]), name
+        # and the step is pure: the same input gives the same output
+        assert pipe.transform(bumped, state)["media_national"].identical(
+            out["media_national"]
+        )
+        # the fit-time scale is still the original one, not the perturbed one
+        assert np.allclose(
+            state["scale"]["media_national"]["mean"].values,
+            mixed_grain_ds["media_national"].mean("date").values,
+        )
+
+    def test_two_counterfactuals_are_independent_of_each_other(self, mixed_grain_ds):
+        pipe = Pipeline(
+            [("scale", VariableTransformer({"media_national": preprocessing.MeanScaler(dims=("date",))}))]
+        )
+        state = pipe.fit(mixed_grain_ds)
+        up = mixed_grain_ds.copy(deep=True)
+        up["media_national"] = up["media_national"] * 1.10
+        down = mixed_grain_ds.copy(deep=True)
+        down["media_national"] = down["media_national"] * 0.90
+        # running one after the other must not leak state between them
+        assert np.allclose(
+            pipe.transform(down, state)["media_national"].values,
+            pipe.transform(mixed_grain_ds, state)["media_national"].values * 0.90,
+        )
+        assert np.allclose(
+            pipe.transform(up, state)["media_national"].values,
+            pipe.transform(mixed_grain_ds, state)["media_national"].values * 1.10,
+        )
 
 
 class TestMakePipeline:

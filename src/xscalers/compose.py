@@ -18,7 +18,7 @@ from typing import Any
 import xarray as xr
 
 from .container import flatten, reassemble
-from .core import register
+from .core import _stamp_state, register
 
 __all__ = ["VariableTransformer"]
 
@@ -27,14 +27,16 @@ __all__ = ["VariableTransformer"]
 class VariableTransformer:
     """Map variables/data-tree nodes onto their own transformers.
 
-    ``default`` is either ``"passthrough"`` (unknown keys are left untouched,
+    ``remainder`` is either ``"passthrough"`` (unknown keys are left untouched,
     the sklearn ``remainder`` semantics) or another transformer applied to
-    every variable without an explicit entry.
+    every variable without an explicit entry. ``default`` is a deprecated
+    alias kept so older specs and call sites load unchanged.
     """
 
-    def __init__(self, mapping: Mapping[str, Any] | None = None, default: Any = "passthrough"):
+    def __init__(self, mapping: Mapping[str, Any] | None = None,
+                 remainder: Any = "passthrough", default: Any = None):
         self.mapping = dict(mapping or {})
-        self.default = default
+        self.remainder = default if default is not None else remainder
 
     # -- key matching ------------------------------------------------------
 
@@ -44,7 +46,7 @@ class VariableTransformer:
         for mapped, scaler in self.mapping.items():
             if key.endswith(f"/{mapped}"):
                 return scaler
-        return self.default
+        return self.remainder
 
     @staticmethod
     def _apply(scaler: Any, op: str, da: Any, state: Any) -> Any:
@@ -63,7 +65,9 @@ class VariableTransformer:
             scaler = self._scaler_for(key)
             if scaler == "passthrough" or scaler == "drop":
                 continue
-            states[key] = scaler.compute(da)
+            # stamped with the *scaler's* recipe: the leaf states are the
+            # provenance units, not the dispatch wrapper around them
+            states[key] = _stamp_state(scaler.compute(da), scaler)
         return states
 
     def _warn_on_missing_keys(self, items: Mapping[str, Any]) -> None:
@@ -131,8 +135,13 @@ class VariableTransformer:
     def to_spec_kwargs(self) -> dict[str, Any]:
         from .core import to_spec
 
-        mapping = {key: to_spec(scaler) for key, scaler in self.mapping.items()}
-        default = self.default
-        if not isinstance(default, str):
-            default = to_spec(default)
-        return {"mapping": mapping, "default": default}
+        # "passthrough" (and any other bare string) is a documented value, not
+        # a transformer -- leave it alone instead of trying to spec it
+        mapping = {
+            key: to_spec(scaler) if not isinstance(scaler, str) else scaler
+            for key, scaler in self.mapping.items()
+        }
+        remainder = self.remainder
+        if not isinstance(remainder, str):
+            remainder = to_spec(remainder)
+        return {"mapping": mapping, "remainder": remainder}
