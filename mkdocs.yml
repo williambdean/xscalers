@@ -1,0 +1,81 @@
+site_name: xscalers
+site_description: "sklearn-shaped, dim-aware scaling transformers for xarray and pytensor.xtensor"
+site_author: "Will Dean"
+
+theme:
+  name: "material"
+  features:
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+repo_name: xscalers
+repo_url: https://github.com/williambdean/xscalers
+edit_uri: blob/main/docs/
+site_url: https://williambdean.github.io/xscalers
+
+extra:
+  homepage: https://williambdean.github.io/
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/williambdean/xscalers
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+nav:
+  - Overview: index.md
+  - Guides:
+      - guides/index.md
+      - The basics: guides/basics.md
+      - Mixed grains: guides/mixed-grains.md
+      - Derived metrics: guides/derived-metrics.md
+      - Dropping variables: guides/dropping.md
+      - Splitting variables: guides/splitting.md
+      - Saving the fitted state: guides/saving-state.md
+      - Converting to real units: guides/unscale.md
+      - Post-fit step access: guides/step-access.md
+      - For sklearn users: guides/sklearn-users.md
+  - API Reference:
+      - reference/index.md
+      - Preprocessing: reference/preprocessing.md
+      - Compose: reference/compose.md
+      - Pipeline: reference/pipeline.md
+      - Core: reference/core.md
+      - Container: reference/container.md
+      - Binding: reference/binding.md
+      - Persistence: reference/persistence.md
+      - Serialize: reference/serialize.md
+      - Datasets: reference/datasets.md
