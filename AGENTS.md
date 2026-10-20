@@ -127,7 +127,8 @@ flagship cross-backend parity test passing before any refactor.
   (``zscore``, ``zscore-1``, ...); ``"passthrough"`` is a valid step value;
   ``VariableTransformer(..., remainder="drop")`` drops unmapped variables while
   scaling the mapped ones, and ``VariableDropper(vars=..., labels=...)`` is the
-  standalone drop verb (data-movement steps are not affine — see principle 6).
+  standalone drop verb (value-destroying steps are not affine; value-
+  preserving movement like ``Splitter``/``Renamer`` is an affine identity).
 
 ## Deferred (documented, not built)
 
