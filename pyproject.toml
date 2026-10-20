@@ -26,12 +26,24 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Mathematics",
     "Typing :: Typed",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Operating System :: MacOS",
 ]
+
 requires-python = ">=3.12"
 dependencies = ["numpy>=2.0", "xarray>=2024.10.0"]
 
 [project.optional-dependencies]
 pytensor = ["pytensor>=3.0"]
+
+[project.urls]
+Homepage = "https://github.com/williambdean/xscalers"
+Repository = "https://github.com/williambdean/xscalers"
+"Bug Tracker" = "https://github.com/williambdean/xscalers/issues"
 
 [dependency-groups]
 dev = [
