@@ -126,10 +126,22 @@ class VariableTransformer:
         return reassemble(X, out)
 
     def affine_view(self, state: Mapping[str, Any]) -> dict[str, Any]:
-        """Per-variable affine views from this step's states."""
+        """Per-variable affine views from this step's states.
+
+        Raises TypeError naming the transformer for non-affine recipes —
+        the contract ``Pipeline.affine`` documents.
+        """
         views: dict[str, Any] = {}
         for key, ds in state.items():
-            views[key] = self._scaler_for(key).affine_view(ds)
+            scaler = self._scaler_for(key)
+            view = getattr(scaler, "affine_view", None)
+            if view is None:
+                raise TypeError(
+                    f"Variable {key!r} is mapped to a non-affine transformer "
+                    f"({type(scaler).__name__}); the pipeline has no composed "
+                    "(center, scale) pair for it. Use Pipeline.unscale."
+                )
+            views[key] = view(ds)
         return views
 
     def to_spec_kwargs(self) -> dict[str, Any]:

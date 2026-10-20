@@ -184,6 +184,25 @@ class TestAffineViewPerVariable:
             by_hand = (mixed_grain_ds[name] - pair["center"]) / pair["scale"]
             assert np.allclose(by_hand.transpose(*out[name].dims).values, out[name].values), name
 
+    def test_non_affine_recipe_raises_type_error(self, national_ds):
+        """A non-affine recipe inside this composite must surface the documented
+        TypeError from Pipeline.affine's contract, not an AttributeError from
+        the lookup itself (log-then-scale is the common real-world case)."""
+        from xscalers.pipeline import Pipeline
+
+        vt = VariableTransformer({"target": preprocessing.FunctionTransformer({"target": "log"})})
+        state = vt.fit(national_ds)
+        with pytest.raises(TypeError, match="FunctionTransformer"):
+            vt.affine_view(state)
+
+        pipe = Pipeline([
+            ("choose", vt),
+            ("scale", VariableTransformer({"media": preprocessing.MeanScaler(dims=("date",))})),
+        ])
+        pipe.fit(national_ds)
+        with pytest.raises(TypeError, match="FunctionTransformer"):
+            pipe.affine(pipe.states_)
+
     def test_pair_inverts_the_transform(self, mixed_grain_ds):
         vt = _make()
         state = vt.fit(mixed_grain_ds)
