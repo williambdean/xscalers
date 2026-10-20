@@ -13,7 +13,12 @@ from xscalers.pipeline import Pipeline
 
 def _national_pipeline():
     return Pipeline(
-        [("scale", VariableTransformer({"target": ZScore(dims=("date",)), "media": MeanScaler(dims=("date",))}))],
+        [
+            (
+                "scale",
+                VariableTransformer({"target": ZScore(dims=("date",)), "media": MeanScaler(dims=("date",))}),
+            )
+        ],
     )
 
 
@@ -49,9 +54,7 @@ class TestUnscaleAffine:
         sym = ptx.xtensor("media_contrib", dims=("date", "channel"))
         f = pytensor.function([sym], pipe.unscale(sym, var="media").values)
         value = np.full((104, 3), 0.5)
-        eager = pipe.unscale(
-            xr.DataArray(value, dims=("date", "channel")), var="media"
-        ).values
+        eager = pipe.unscale(xr.DataArray(value, dims=("date", "channel")), var="media").values
         assert np.allclose(f(value), eager)
 
 
@@ -105,9 +108,7 @@ class TestUnscaleErrors:
         state_tree(state).to_netcdf(path)
         reloaded = from_spec(pipe.to_spec())
         with pytest.raises(RuntimeError, match="no fitted state"):
-            reloaded.unscale(
-                xr.DataArray(np.zeros((104, 3)), dims=("date", "channel")), var="media"
-            )
+            reloaded.unscale(xr.DataArray(np.zeros((104, 3)), dims=("date", "channel")), var="media")
         # with the reloaded state bound explicitly, the same verb works
         reloaded_state = {"scale": state_from_tree(xr.open_datatree(path))["scale"]}
         contributions = xr.DataArray(np.full((104, 3), 0.5), dims=("date", "channel"))

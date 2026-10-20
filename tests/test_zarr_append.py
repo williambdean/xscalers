@@ -109,10 +109,7 @@ class TestZarrAppend:
         tree = xr.open_datatree(store, group="scalers")
         assert "media_national" in tree.children["scale"].children
         # flat state dict reconstructed from the reloaded tree — same transform
-        reloaded = {
-            name: node.dataset
-            for name, node in tree.children["scale"].children.items()
-        }
+        reloaded = {name: node.dataset for name, node in tree.children["scale"].children.items()}
         out = vt.transform(mixed, reloaded)
         nat = mixed["media_national"]
         assert np.allclose(out["media_national"].values, (nat / nat.mean("date")).values)
@@ -137,7 +134,9 @@ class TestSplitDataset:
         # and each piece keeps its coordinate under the piece-specific dim name
         assert set(split.data_vars) == {"media_digital", "media_linear", "controls"}
         assert set(split["media_digital"].coords["channel_digital"].values) == {
-            "search", "social", "fb",
+            "search",
+            "social",
+            "fb",
         }
 
         back = splitter.inverse_transform(split, state)

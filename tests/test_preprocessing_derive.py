@@ -186,9 +186,7 @@ class TestDropper:
             Dropper(vars="target").fit(da)
 
     def test_state_records_what_was_dropped(self, mixed_grain_ds):
-        state = Dropper(vars=["media_national"], labels={"control": ["reference"]}).fit(
-            mixed_grain_ds
-        )
+        state = Dropper(vars=["media_national"], labels={"control": ["reference"]}).fit(mixed_grain_ds)
         assert state.attrs["kind"] == "drop"
         # JSON strings, so a pipeline state still writes to netcdf
         assert json.loads(state.attrs["dropped_vars"]) == ["media_national"]
@@ -203,9 +201,7 @@ class TestDropper:
         tree.to_netcdf(path)
         reopened = xr.open_datatree(path)
         assert json.loads(reopened["prune"].dataset.attrs["dropped_vars"]) == ["media_national"]
-        assert json.loads(reopened["prune"].dataset.attrs["dropped_labels"]) == {
-            "control": ["reference"]
-        }
+        assert json.loads(reopened["prune"].dataset.attrs["dropped_labels"]) == {"control": ["reference"]}
 
     def test_spec_round_trip(self, mixed_grain_ds):
         spec = to_spec(Dropper(vars=["media_national"], labels={"control": ["reference"]}))
@@ -295,9 +291,9 @@ class TestDerive:
         )
         state = near.fit(ds)
         out = near.transform(ds, state)
-        expected = ds["controls"].sel(control=["level", "reference"]).sum(
-            "control"
-        ) / ds["controls"].sel(control="reference")
+        expected = ds["controls"].sel(control=["level", "reference"]).sum("control") / ds["controls"].sel(
+            control="reference"
+        )
         assert out["level_share"].dims == ("date", "product")
         assert np.allclose(out["level_share"].values, expected.values)
 
@@ -354,14 +350,13 @@ class TestDerive:
         manual = mixed_grain_ds["controls"].sel(control="level") / mixed_grain_ds["controls"].sel(
             control="reference"
         )
-        manual_scaled = (
-            manual - manual.mean("date")
-        ) / manual.std("date", ddof=0)
+        manual_scaled = (manual - manual.mean("date")) / manual.std("date", ddof=0)
         assert np.allclose(scaled["level_ratio"].values, manual_scaled.values)
         back = pipe.inverse_transform(scaled, state)
         for var in mixed_grain_ds.data_vars:
             assert np.allclose(back[var].values, mixed_grain_ds[var].values)
         assert "level_ratio" not in back.data_vars
+
 
 class TestDeriveThenPrune:
     """The fit-pipeline handoff: derive a ratio across variables, then drop the
@@ -489,9 +484,7 @@ class TestSplitDerivePruneScaleHandoff:
             (tv / tv.mean("date")).values,
         )
         ooh = raw["media_national"].sel(channel="ooh")
-        assert np.allclose(
-            out["media_national_ooh"].squeeze("channel_ooh").values, (ooh / 100.0).values
-        )
+        assert np.allclose(out["media_national_ooh"].squeeze("channel_ooh").values, (ooh / 100.0).values)
 
     def test_state_tree_has_one_leaf_per_piece_and_surviving_variable(self):
         from xscalers.container import state_tree
@@ -594,9 +587,7 @@ class TestDeriveDogfood:
             assert np.allclose(scaled[name].values, expected_z.values)
             # z-score sanity: mean ~0, std ~1 over both kept dims
             assert np.allclose(scaled[name].mean(("date", "product")).values, 0.0, atol=1e-8)
-            assert np.allclose(
-                scaled[name].std(("date", "product"), ddof=0).values, 1.0, rtol=1e-6
-            )
+            assert np.allclose(scaled[name].std(("date", "product"), ddof=0).values, 1.0, rtol=1e-6)
 
     def test_reverse_chain_recovers_inputs(self, mixed_grain_ds):
         pipe = self._pipe()

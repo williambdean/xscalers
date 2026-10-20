@@ -33,8 +33,9 @@ class VariableTransformer:
     alias kept so older specs and call sites load unchanged.
     """
 
-    def __init__(self, mapping: Mapping[str, Any] | None = None,
-                 remainder: Any = "passthrough", default: Any = None):
+    def __init__(
+        self, mapping: Mapping[str, Any] | None = None, remainder: Any = "passthrough", default: Any = None
+    ):
         self.mapping = dict(mapping or {})
         self.remainder = default if default is not None else remainder
 

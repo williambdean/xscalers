@@ -153,7 +153,9 @@ class TestInverse:
 class TestAffine:
     def test_affine_refusal_names_the_union(self, mixed_grain_ds):
         union = make_union(_branch_digital(), _branch_seasonality())
-        pipe = Pipeline([("union", union), ("scale", VariableTransformer({"controls_nat": ZScore(dims=("date",))}))])
+        pipe = Pipeline(
+            [("union", union), ("scale", VariableTransformer({"controls_nat": ZScore(dims=("date",))}))]
+        )
         state = pipe.fit(mixed_grain_ds)
         with pytest.raises(TypeError, match="Union"):
             pipe.affine(state)

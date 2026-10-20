@@ -118,9 +118,7 @@ class TestAffine:
         state = pipe.fit(mixed_grain_ds)
         scaled = pipe.transform(mixed_grain_ds, state)["media_national"]
         contrib = xr.zeros_like(scaled) + 0.25
-        back = pipe.unscale(
-            xr.Dataset({"media_national": contrib}), var="media_national", state=state
-        )
+        back = pipe.unscale(xr.Dataset({"media_national": contrib}), var="media_national", state=state)
         pair = pipe.affine(state)["media_national"]
         expected = contrib * pair["scale"] + pair["center"]
         assert np.allclose(back["media_national"].values, expected.values)
@@ -237,17 +235,13 @@ class TestFittedStateAsCounterfactualBasis:
         out = pipe.transform(bumped, state)
 
         # the perturbed variable moved, and by the same 10%
-        assert np.allclose(
-            out["media_national"].values, base["media_national"].values * 1.10
-        )
+        assert np.allclose(out["media_national"].values, base["media_national"].values * 1.10)
         # every other variable is bit-identical to the unperturbed run
         for name in base.data_vars:
             if name != "media_national":
                 assert out[name].identical(base[name]), name
         # and the step is pure: the same input gives the same output
-        assert pipe.transform(bumped, state)["media_national"].identical(
-            out["media_national"]
-        )
+        assert pipe.transform(bumped, state)["media_national"].identical(out["media_national"])
         # the fit-time scale is still the original one, not the perturbed one
         assert np.allclose(
             state["scale"]["media_national"]["mean"].values,

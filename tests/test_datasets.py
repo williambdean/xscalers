@@ -103,9 +103,7 @@ class TestMixedGrainBroadcastOrder:
     def test_scaling_at_native_grain_matches_broadcast_then_scale(self):
         raw = load_panel()
         pieces = {"tv": "tv", "ooh": "ooh"}  # piece name -> channel label
-        recipes = {
-            f"media_national_{p_}": MeanScaler(dims=("date",)) for p_ in pieces
-        }
+        recipes = {f"media_national_{p_}": MeanScaler(dims=("date",)) for p_ in pieces}
 
         # native grain: split (date, channel) -> scale -> broadcast to product
         native = self._split(pieces)(raw)
@@ -118,9 +116,11 @@ class TestMixedGrainBroadcastOrder:
 
         # broadcast first, then split and scale the (date, product) pieces
         broadcast = raw.copy()
-        broadcast["media_national"] = raw["media_national"].expand_dims(
-            {"product": raw["product"]}
-        ).transpose("date", "product", "channel")
+        broadcast["media_national"] = (
+            raw["media_national"]
+            .expand_dims({"product": raw["product"]})
+            .transpose("date", "product", "channel")
+        )
         after_bare = self._split(pieces)(broadcast)
         after_scaler = VariableTransformer(recipes)
         after = after_scaler.transform(after_bare, after_scaler.fit(after_bare))
@@ -135,15 +135,11 @@ class TestMixedGrainBroadcastOrder:
     def test_native_grain_state_has_no_redundant_product_axis(self):
         raw = load_panel()
         native = self._split({"tv": "tv"})(raw)
-        state = VariableTransformer({"media_national_tv": MeanScaler(dims=("date",))}).fit(
-            native
-        )
+        state = VariableTransformer({"media_national_tv": MeanScaler(dims=("date",))}).fit(native)
         assert "product" not in state["media_national_tv"]["mean"].dims
 
         broadcast = raw.copy()
-        broadcast["media_national"] = raw["media_national"].expand_dims(
-            {"product": raw["product"]}
-        )
+        broadcast["media_national"] = raw["media_national"].expand_dims({"product": raw["product"]})
         after = VariableTransformer({"media_national_tv": MeanScaler(dims=("date",))}).fit(
             self._split({"tv": "tv"})(broadcast)
         )
@@ -188,7 +184,6 @@ class TestReadmeTypecheck:
 
     @pytest.fixture
     def typed_groups(self) -> list[str]:
-
         readme = (pathlib.Path(__file__).parent.parent / "README.md").read_text()
         blocks = re.findall(r"```python\n(.*?)```", readme, re.DOTALL)
         grouped: list[str] = []
@@ -218,5 +213,5 @@ class TestReadmeTypecheck:
                 text=True,
                 check=False,  # exit code carries the diagnostics; asserts read stdout
             )
-            errors = [l for l in result.stdout.splitlines() if "error" in l]
+            errors = [line for line in result.stdout.splitlines() if "error" in line]
             assert not errors, f"README block group {i} does not type-check:\n" + "\n".join(errors)

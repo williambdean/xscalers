@@ -16,9 +16,7 @@ def to_spec(transformer: Any) -> dict[str, Any]:
     override = type(transformer).__dict__.get("to_spec")
     if override is not None and not hasattr(type(transformer), "to_spec_kwargs"):
         return override(transformer)
-    kwargs = {
-        k: (_spec_value(v)) for k, v in transformer.to_spec_kwargs().items()
-    }
+    kwargs = {k: (_spec_value(v)) for k, v in transformer.to_spec_kwargs().items()}
     return {"kind": type(transformer).__name__, "kwargs": kwargs}
 
 

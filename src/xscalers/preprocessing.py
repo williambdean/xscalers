@@ -36,9 +36,9 @@ from .core import (
 
 __all__ = [
     "Derive",
-    "Dropper",   # deprecated alias of VariableDropper
+    "Dropper",  # deprecated alias of VariableDropper
     "FixedScaler",
-    "Func",      # deprecated alias of FunctionTransformer
+    "Func",  # deprecated alias of FunctionTransformer
     "FunctionTransformer",
     "MeanScaler",
     "Selector",
@@ -75,9 +75,7 @@ class FunctionTransformer(BaseTransformer):
     def __init__(self, mapping: dict[str, str]):
         unknown = {op for op in mapping.values() if op not in _FUNC_INVERSES}
         if unknown:
-            raise ValueError(
-                f"Unknown functions {sorted(unknown)}; known: {sorted(_FUNC_INVERSES)}"
-            )
+            raise ValueError(f"Unknown functions {sorted(unknown)}; known: {sorted(_FUNC_INVERSES)}")
         self.mapping = dict(mapping)
 
     def to_spec_kwargs(self) -> dict[str, Any]:
@@ -129,9 +127,7 @@ class FixedScaler(BaseAffineTransformer):
 
     def compute(self, X: Any) -> xr.Dataset:
         scaled_from = getattr(X, "name", None)
-        return as_state(
-            "fixed", None, scaled_from, center=self.center, scale=self.scale
-        )
+        return as_state("fixed", None, scaled_from, center=self.center, scale=self.scale)
 
 
 class _DataDerivedScaler(BaseAffineTransformer):
@@ -236,17 +232,12 @@ class Splitter:
         self.pieces = {piece: dict(self._labels(sel)) for piece, sel in pieces.items()}
         split_dims = {dim for sel in self.pieces.values() for dim in sel}
         if len(split_dims) != 1:
-            raise ValueError(
-                f"Splitter splits along exactly one dim; pieces give {sorted(split_dims)}"
-            )
+            raise ValueError(f"Splitter splits along exactly one dim; pieces give {sorted(split_dims)}")
         self.split_dim = next(iter(split_dims))
 
     @staticmethod
     def _labels(sel: Mapping[str, Any]) -> dict[str, list[Any]]:
-        return {
-            dim: [value] if isinstance(value, str) else list(value)
-            for dim, value in sel.items()
-        }
+        return {dim: [value] if isinstance(value, str) else list(value) for dim, value in sel.items()}
 
     def to_spec_kwargs(self) -> dict[str, Any]:
         return {
@@ -265,9 +256,7 @@ class Splitter:
             labels = np.asarray(node[var][self.split_dim].values)
         else:
             raise TypeError("Splitter works on Dataset or DataTree inputs")
-        entries: dict[str, Any] = {
-            f"labels_{self.split_dim}": xr.DataArray(labels, dims=("labels_index",))
-        }
+        entries: dict[str, Any] = {f"labels_{self.split_dim}": xr.DataArray(labels, dims=("labels_index",))}
         for piece, sel in self.pieces.items():
             entries[f"positions_{piece}"] = xr.DataArray(
                 _positions(labels, sel[self.split_dim]), dims=(f"index_{piece}",)
@@ -327,25 +316,17 @@ class Splitter:
                     continue
                 pieces.append(X[piece_var].rename({f"{dim}_{piece}": dim}))
             combined = xr.concat(pieces, dim=dim).reindex({dim: stored})
-            out = {
-                key: da for key, da in flatten(X).items() if not key.startswith(f"{var}_")
-            }
+            out = {key: da for key, da in flatten(X).items() if not key.startswith(f"{var}_")}
             out[var] = combined.rename(var)
             return reassemble(X, out)
         parent = _node_of(X, self.source)
         pieces_by_order = [
-            next(iter(parent.children[piece].dataset.data_vars.values()))
-            for piece in state.attrs["pieces"]
+            next(iter(parent.children[piece].dataset.data_vars.values())) for piece in state.attrs["pieces"]
         ]
         combined = xr.concat(pieces_by_order, dim=dim).reindex({dim: stored})
-        out = {
-            key: da
-            for key, da in flatten(X).items()
-            if not key.startswith(f"{self.source}/")
-        }
+        out = {key: da for key, da in flatten(X).items() if not key.startswith(f"{self.source}/")}
         out[self.source] = combined.rename(self.source)
         return reassemble(X, out)
-
 
 
 @register
@@ -430,19 +411,16 @@ class Derive:
         return {
             "name": self.name,
             "left": {"var": self.left[0], "sel": self._jsonable_sel(self.left[1])},
-            "right": None if self.right is None else {
-                "var": self.right[0], "sel": self._jsonable_sel(self.right[1])
-            },
+            "right": None
+            if self.right is None
+            else {"var": self.right[0], "sel": self._jsonable_sel(self.right[1])},
             "op": self.op,
             "reduce": self.reduce,
         }
 
     @staticmethod
     def _jsonable_sel(sel: Mapping[str, Any]) -> dict[str, Any]:
-        return {
-            dim: list(value) if isinstance(value, (list, tuple)) else value
-            for dim, value in sel.items()
-        }
+        return {dim: list(value) if isinstance(value, (list, tuple)) else value for dim, value in sel.items()}
 
     def to_spec(self) -> dict[str, Any]:
         """Serialize the derive recipe."""
@@ -456,15 +434,12 @@ class Derive:
         var, sel = piece if piece is not None else (None, {})
         da = X[var]
         sel_args: dict[str, Any] = {
-            str(dim): list(value) if isinstance(value, (list, tuple)) else value
-            for dim, value in sel.items()
+            str(dim): list(value) if isinstance(value, (list, tuple)) else value for dim, value in sel.items()
         }
         for dim, value in sel_args.items():
             da = da.sel(**{dim: value})
         reduce = self.reduce
-        needs_reduce = any(
-            isinstance(v, (list, tuple)) and len(v) > 1 for v in sel.values()
-        )
+        needs_reduce = any(isinstance(v, (list, tuple)) and len(v) > 1 for v in sel.values())
         if reduce and needs_reduce:
             da = getattr(da, reduce)(dim=list(sel))
         elif reduce is not None and needs_reduce:
@@ -493,7 +468,7 @@ class Derive:
                 attrs={
                     "derived": self.name,
                     "op": self.op,
-                    "reduce": self.reduce or "" ,
+                    "reduce": self.reduce or "",
                 },
             ),
             self,
@@ -531,10 +506,7 @@ class Selector:
 
     @staticmethod
     def _jsonable_sel(sel: Mapping[str, Any]) -> dict[str, Any]:
-        return {
-            dim: list(value) if isinstance(value, (list, tuple)) else value
-            for dim, value in sel.items()
-        }
+        return {dim: list(value) if isinstance(value, (list, tuple)) else value for dim, value in sel.items()}
 
     def fit(self, X: Any) -> xr.Dataset:
         return _stamp_state(as_state("selector", None, scaled_from=None), self)
@@ -589,8 +561,7 @@ class VariableDropper:
     ):
         self.vars = [vars] if isinstance(vars, str) else (list(vars) if vars else [])
         self.labels = {
-            dim: [value] if isinstance(value, str) else list(value)
-            for dim, value in (labels or {}).items()
+            dim: [value] if isinstance(value, str) else list(value) for dim, value in (labels or {}).items()
         }
         if not self.vars and not self.labels:
             raise ValueError("Dropper needs at least one of vars= or labels= to drop")
@@ -604,8 +575,7 @@ class VariableDropper:
     def fit(self, X: Any) -> xr.Dataset:
         if not isinstance(X, xr.Dataset):
             raise TypeError(
-                f"Dropper takes an xr.Dataset, got {type(X).__name__}; DataTree "
-                "node drops are deferred."
+                f"Dropper takes an xr.Dataset, got {type(X).__name__}; DataTree node drops are deferred."
             )
         missing = [name for name in self.vars if name not in X.data_vars]
         if missing:
@@ -666,7 +636,9 @@ class Renamer:
     def fit(self, X: Any) -> xr.Dataset:
         return _stamp_state(
             as_state(
-                "rename", None, scaled_from=None,
+                "rename",
+                None,
+                scaled_from=None,
                 attrs={"mapping": json.dumps(self.mapping)},
             ),
             self,

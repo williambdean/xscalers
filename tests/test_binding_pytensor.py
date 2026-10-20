@@ -87,8 +87,6 @@ class TestSymbolicTransformFromFittedState:
         state = scaler.fit(da)
 
         sym = ptx.xtensor("x", dims=("date", "geo", "media"))
-        f = pytensor.function(
-            [sym], scaler.inverse_transform(scaler.transform(sym, state), state).values
-        )
+        f = pytensor.function([sym], scaler.inverse_transform(scaler.transform(sym, state), state).values)
         value = np.arange(16.0).reshape(4, 2, 2)
         assert np.allclose(f(value), value)

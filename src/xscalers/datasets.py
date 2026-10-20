@@ -152,11 +152,7 @@ def load_panel() -> xr.Dataset:
             "peer_flag": (("date", "product"), peer_flag),
             "target": (
                 ("date", "product"),
-                50
-                + 6 * flag
-                + 3 * share
-                + 20 * flag * peer_flag
-                + rng.normal(0, 3, (n, n_products)),
+                50 + 6 * flag + 3 * share + 20 * flag * peer_flag + rng.normal(0, 3, (n, n_products)),
             ),
         },
         coords={

@@ -147,8 +147,7 @@ class TestDatasetInputDispatch:
         assert set(out.data_vars) == set(mixed_grain_ds.data_vars)
         assert np.allclose(
             out["media_national"].values,
-            mixed_grain_ds["media_national"].values
-            / mixed_grain_ds["media_national"].mean("date").values,
+            mixed_grain_ds["media_national"].values / mixed_grain_ds["media_national"].mean("date").values,
         )
 
     def test_dataset_input_inverse_roundtrip(self, mixed_grain_ds):

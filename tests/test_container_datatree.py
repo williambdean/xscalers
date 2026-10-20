@@ -46,7 +46,10 @@ class TestStateTree:
         from xscalers.compose import VariableTransformer
 
         vt = VariableTransformer(
-            {"media": preprocessing.FixedScaler(scale=100.0), "controls": preprocessing.ZScore(dims=("date",))}
+            {
+                "media": preprocessing.FixedScaler(scale=100.0),
+                "controls": preprocessing.ZScore(dims=("date",)),
+            }
         )
         state = vt.fit(split_tree)
         tree = state_tree(state)
@@ -56,7 +59,10 @@ class TestStateTree:
         from xscalers.compose import VariableTransformer
 
         vt = VariableTransformer(
-            {"media": preprocessing.FixedScaler(scale=100.0), "controls": preprocessing.ZScore(dims=("date",))}
+            {
+                "media": preprocessing.FixedScaler(scale=100.0),
+                "controls": preprocessing.ZScore(dims=("date",)),
+            }
         )
         state = vt.fit(split_tree)
         path = tmp_path / "state.nc"

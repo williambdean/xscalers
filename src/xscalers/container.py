@@ -113,9 +113,7 @@ def state_tree(states: Mapping[str, Any]) -> xr.DataTree:
             elif isinstance(value, Mapping):
                 _walk(path, value)
             else:
-                raise TypeError(
-                    f"Cannot place state at {path!r}: {type(value).__name__}"
-                )
+                raise TypeError(f"Cannot place state at {path!r}: {type(value).__name__}")
 
     _walk("", states)
     root = xr.Dataset()

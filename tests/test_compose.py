@@ -48,9 +48,11 @@ class TestSplitPiecesAtMixedGrains:
         # national series is broadcast to product grain upstream, digital is
         # already product grain -- the two now differ only in their split dim
         raw = raw.copy()
-        raw["media_national"] = raw["media_national"].expand_dims(
-            {"product": raw["product"]}
-        ).transpose("date", "product", "channel")
+        raw["media_national"] = (
+            raw["media_national"]
+            .expand_dims({"product": raw["product"]})
+            .transpose("date", "product", "channel")
+        )
         split = Pipeline(
             [
                 (
@@ -144,9 +146,7 @@ class TestTransform:
         vt = _make()
         state = vt.fit(mixed_grain_ds)
         out = vt.transform(mixed_grain_ds, state)
-        assert np.allclose(
-            out["controls_nat"].values, mixed_grain_ds["controls_nat"].values
-        )
+        assert np.allclose(out["controls_nat"].values, mixed_grain_ds["controls_nat"].values)
 
     def test_inverse_restores_all(self, mixed_grain_ds):
         vt = _make()
@@ -195,10 +195,12 @@ class TestAffineViewPerVariable:
         with pytest.raises(TypeError, match="FunctionTransformer"):
             vt.affine_view(state)
 
-        pipe = Pipeline([
-            ("choose", vt),
-            ("scale", VariableTransformer({"media": preprocessing.MeanScaler(dims=("date",))})),
-        ])
+        pipe = Pipeline(
+            [
+                ("choose", vt),
+                ("scale", VariableTransformer({"media": preprocessing.MeanScaler(dims=("date",))})),
+            ]
+        )
         pipe.fit(national_ds)
         with pytest.raises(TypeError, match="FunctionTransformer"):
             pipe.affine(pipe.states_)
@@ -210,14 +212,18 @@ class TestAffineViewPerVariable:
         view = vt.affine_view(state)
         for name, pair in view.items():
             back = out[name] * pair["scale"] + pair["center"]
-            assert np.allclose(back.transpose(*mixed_grain_ds[name].dims).values,
-                               mixed_grain_ds[name].values), name
+            assert np.allclose(
+                back.transpose(*mixed_grain_ds[name].dims).values, mixed_grain_ds[name].values
+            ), name
 
 
 class TestDataTreeDispatch:
     def test_tree_input_fit_and_transform(self, split_tree):
         vt = VariableTransformer(
-            {"media": preprocessing.MeanScaler(dims=("date",)), "controls": preprocessing.ZScore(dims=("date",))}
+            {
+                "media": preprocessing.MeanScaler(dims=("date",)),
+                "controls": preprocessing.ZScore(dims=("date",)),
+            }
         )
         state = vt.fit(split_tree)
         out = vt.transform(split_tree, state)
@@ -228,17 +234,13 @@ class TestDataTreeDispatch:
 
 class TestDropDefault:
     def test_drop_removes_unmapped_variables(self, mixed_grain_ds):
-        vt = VariableTransformer(
-            {"media_national": preprocessing.MeanScaler(dims=("date",))}, default="drop"
-        )
+        vt = VariableTransformer({"media_national": preprocessing.MeanScaler(dims=("date",))}, default="drop")
         state = vt.fit(mixed_grain_ds)
         out = vt.transform(mixed_grain_ds, state)
         assert set(out.data_vars) == {"media_national"}
         back = vt.inverse_transform(out, state)
         assert set(back.data_vars) == {"media_national"}
-        assert np.allclose(
-            back["media_national"].values, mixed_grain_ds["media_national"].values
-        )
+        assert np.allclose(back["media_national"].values, mixed_grain_ds["media_national"].values)
 
     def test_drop_plus_passthrough_explicit(self, mixed_grain_ds):
         vt = VariableTransformer(

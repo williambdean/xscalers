@@ -191,14 +191,10 @@ class BaseTransformer(ABC):
     def compute(self, X: Any) -> xr.Dataset:
         """Data-derived fitted state."""
 
-    def _transform(
-        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
-    ) -> Any:
+    def _transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         raise NotImplementedError
 
-    def _inverse_transform(
-        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
-    ) -> Any:
+    def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         raise NotImplementedError
 
     def fit(self, X: Any) -> Any:
@@ -213,18 +209,14 @@ class BaseTransformer(ABC):
             return _stamp_state(self.compute(X), self)
         return _stamp_state(VariableTransformer(remainder=self).fit(X), self)
 
-    def transform(
-        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
-    ) -> Any:
+    def transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         from .compose import VariableTransformer
 
         if self.__scalarish(X):
             return self._transform(X, state)
         return VariableTransformer(remainder=self).transform(X, state)
 
-    def inverse_transform(
-        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
-    ) -> Any:
+    def inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         from .compose import VariableTransformer
 
         if self.__scalarish(X):
@@ -272,27 +264,21 @@ class BaseAffineTransformer(BaseTransformer):
     PAIR: ClassVar[dict[str, str]] = {"center": "center", "scale": "scale"}
 
     @classmethod
-    def _entry(
-        cls, state: Mapping[str, xr.DataArray] | xr.Dataset, role: str
-    ) -> Any:
+    def _entry(cls, state: Mapping[str, xr.DataArray] | xr.Dataset, role: str) -> Any:
         entry = cls.PAIR.get(role)
         if entry is None or entry not in state:
             if role == "scale":
                 raise KeyError(f"no {entry!r} entry for the scale role in {sorted(map(str, state))}")
-            return xr.DataArray(0.0)          # center: additive identity
+            return xr.DataArray(0.0)  # center: additive identity
         return state[entry]
 
-    def _transform(
-        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
-    ) -> Any:
+    def _transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         from .binding import lift_state_if_symbolic
 
         state = lift_state_if_symbolic(X, state)
         return (X - self._entry(state, "center")) / self._entry(state, "scale")
 
-    def _inverse_transform(
-        self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset
-    ) -> Any:
+    def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         from .binding import lift_state_if_symbolic
 
         state = lift_state_if_symbolic(X, state)

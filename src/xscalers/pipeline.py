@@ -69,10 +69,7 @@ class _Passthrough:
 
 class Pipeline:
     def __init__(self, steps: list[tuple[str, Any]]):
-        self.steps = [
-            (name, _Passthrough() if step == "passthrough" else step)
-            for name, step in steps
-        ]
+        self.steps = [(name, _Passthrough() if step == "passthrough" else step) for name, step in steps]
         self.states_: dict[str, Any] | None = None
 
     def named_steps(self) -> dict[str, Any]:
@@ -168,13 +165,10 @@ class Pipeline:
         if any(getattr(step, "affine_view", None) is None for _, step in self.steps):
             # non-affine pipeline: partial inverse — from the last step back,
             # owned variables are inverted; creation steps STOP the walk
-            current_value: Any = (
-                xr.Dataset({var: x}) if isinstance(x, xr.DataArray) else x
-            )
+            current_value: Any = xr.Dataset({var: x}) if isinstance(x, xr.DataArray) else x
             if var not in current_value.data_vars:
                 raise KeyError(
-                    f"No data variable named {var!r}; variables: "
-                    f"{sorted(map(str, current_value.data_vars))}"
+                    f"No data variable named {var!r}; variables: {sorted(map(str, current_value.data_vars))}"
                 )
             for name, step in reversed(self.steps):
                 step_state = chosen[name]
@@ -259,9 +253,7 @@ class Union:
         collisions: str = "require_equal",
     ):
         if collisions not in {"require_equal", "error", "keep_first"}:
-            raise ValueError(
-                f"collisions must be require_equal | error | keep_first; got {collisions!r}"
-            )
+            raise ValueError(f"collisions must be require_equal | error | keep_first; got {collisions!r}")
         seen: dict[str, int] = {}
         resolved: list[tuple[str, Any]] = []
         for name, transformer in branches:
@@ -327,11 +319,10 @@ class Union:
                 raise ValueError(
                     f"Union branches {branch!r} and an earlier branch produce conflicting "
                     f"values for variable {key!r} (collisions={self.collisions!r}); "
-                    "either scale a variable in one branch only, or pass collisions=\'error\'/'keep_first'"
+                    "either scale a variable in one branch only, or pass collisions='error'/'keep_first'"
                 )
             raise ValueError(
-                f"Union: variable {key!r} collides between branches under "
-                f"collisions={self.collisions!r}"
+                f"Union: variable {key!r} collides between branches under collisions={self.collisions!r}"
             )
 
     def __getitem__(self, key: str) -> BoundStep:
@@ -375,12 +366,8 @@ class Union:
             for key, pair in branch_pairs.items():
                 if key in composed:
                     prev = composed[key]
-                    same = (
-                        self.collisions == "keep_first"
-                        or (
-                            pair["center"].identical(prev["center"])
-                            and pair["scale"].identical(prev["scale"])
-                        )
+                    same = self.collisions == "keep_first" or (
+                        pair["center"].identical(prev["center"]) and pair["scale"].identical(prev["scale"])
                     )
                     if not same:
                         raise ValueError(
@@ -389,9 +376,7 @@ class Union:
                             f"(collisions={self.collisions!r})"
                         )
                     continue
-                composed[key] = xr.Dataset(
-                    {"center": pair["center"], "scale": pair["scale"]}
-                )
+                composed[key] = xr.Dataset({"center": pair["center"], "scale": pair["scale"]})
                 owners[key] = name
         return composed
 
@@ -405,9 +390,7 @@ class Union:
         """
         chosen = state if state is not None else self.states_
         if chosen is None:
-            raise RuntimeError(
-                "Union has no fitted state; pass state=<state> or bind one"
-            )
+            raise RuntimeError("Union has no fitted state; pass state=<state> or bind one")
         try:
             pair = self.affine(chosen)[var]
         except KeyError as err:
@@ -458,7 +441,6 @@ def make_union(*branches: Any, collisions: str = "require_equal") -> Union:
         counts[base] = count
         resolved.append((base if count == 1 else f"{base}-{count - 1}", branch))
     return Union(branches=resolved, collisions=collisions)
-
 
 
 def _step_owns(step: Any, step_state: Any, var: str) -> bool:
