@@ -60,10 +60,14 @@ dev = [
     "pandas-stubs>=3.0.5.260914",
     "zarr>=3.4.0",
     "pymc>=6.3.2",
-    "marimo>=0.25.0",
-    "pymc-marketing",
     "zensical>=0.0.71",
     "mkdocstrings[python]>=1.0.8",
+]
+# notebook/dogfood tooling only (pymc-marketing is a git dep of a feature
+# branch): synced locally, not in CI
+notebooks = [
+    "marimo>=0.25.0",
+    "pymc-marketing",
 ]
 
 [tool.coverage.run]
