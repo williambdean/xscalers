@@ -3,8 +3,9 @@
 Every function is deterministic (fixed seed), so README examples and tests
 produce identical data anywhere. Sizes are deliberately panel-shaped:
 
-- :func:`load_national` — one series per channel plus a target and a control,
-  all at ``(date,)`` grain.
+- :func:`load_national` — one target, one control, and one series per
+  channel: ``target``/``controls`` at ``(date,)``, ``media`` at
+  ``(date, channel)``.
 - :func:`load_mixed_grain` — variables at different grains (national media,
   geo-grain digital media, product-grain controls), the case that motivated
   per-variable dispatch and per-variable dims.
@@ -102,9 +103,11 @@ def load_mixed_grain() -> xr.Dataset:
 def load_media_channels() -> xr.Dataset:
     """Load one ``media (date, channel)`` variable needing split treatment.
 
-    Controls sit alongside as a single Dataset of variables (the common shape;
-    DataTree inputs remain supported by the library, but real raw inputs are
-    usually just datasets).
+    ``channel = [search, social, fb, tv, stream]``: the first three are the
+    digital pieces and the last two the linear pieces of the ``Splitter``
+    examples. ``controls`` sits alongside as a single Dataset of variables
+    (the common shape; DataTree inputs remain supported by the library, but
+    real raw inputs are usually just datasets).
     """
     rng = np.random.default_rng(7)
     n = 60
