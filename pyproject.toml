@@ -63,8 +63,9 @@ dev = [
     "zensical>=0.0.71",
     "mkdocstrings[python]>=1.0.8",
 ]
-# notebook/dogfood tooling only (pymc-marketing is a git dep of a feature
-# branch): synced locally, not in CI
+# notebook/dogfood tooling only: synced locally, not in CI. The PR-2831
+# feature branch currently requires pymc<6.1.0 (conflicts with dev's pymc);
+# track upstream main by sha until the VariableScaling PR is compatible
 notebooks = [
     "marimo>=0.25.0",
     "pymc-marketing",
@@ -128,4 +129,4 @@ filterwarnings = [
 ]
 
 [tool.uv.sources]
-pymc-marketing = { git = "https://github.com/pymc-labs/pymc-marketing", rev = "refactor/scaling-fit-transform" }
+pymc-marketing = { git = "https://github.com/pymc-labs/pymc-marketing", rev = "3bf393c7207f873ca98cf2dc8d64ddf870799893" }

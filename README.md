@@ -482,15 +482,20 @@ back = bound.inverse_transform(scaled_again)     # ...and its inverse
 
 ## For sklearn users
 
-sklearn vocabulary: `fit` / `transform` / `inverse_transform` / `Pipeline`,
-`ColumnTransformer`-style per-variable treatment (that's `VariableTransformer`), `make_pipeline`
-(the composition verb — no Kedro-style `>>` chaining, it hides the recipe/state split),
-**`make_union`** (many pipelines over the same dataset, merged with a
-collision policy — covariates-only by design), `"passthrough"` steps. The
-drop verb lives in `VariableDropper` — sklego's `ColumnDropper` over
-`drop_vars`/`drop_sel`, with `Selector` covering the keeping side. The
-deliberate departure: **state is explicit and passed around**, not hidden as
-`scaler.mean_` — that is what lets you edit fitted values and reuse them
+The vocabulary is deliberately sklearn-shaped:
+
+| sklearn | xscalers | notes |
+| --- | --- | --- |
+| `fit` / `transform` / `inverse_transform` | same | states are `xr.Dataset`s, not attributes |
+| `ColumnTransformer` | `VariableTransformer` | per-variable treatment over named data variables |
+| `ColumnDropper` (sklego) | `VariableDropper` | over `drop_vars` / `drop_sel`; `Selector` covers the keeping side |
+| `Pipeline` | `Pipeline` | named steps, chained states, reversed inverse |
+| `make_pipeline` | `make_pipeline` | the composition verb (no `>>` chaining: it hides the recipe/state split) |
+| `FeatureUnion` | `make_union` | many pipelines over one dataset, collision policy, covariates-only by design |
+| `"passthrough"` | `"passthrough"` | identical semantics |
+
+The deliberate departure: state is **explicit and passed around**, not hidden
+as `scaler.mean_`, which is what lets you edit fitted values and reuse them
 across backends. The counterpart to `transform` for model code is
 **`unscale`**: one verb, correct for affine pipelines and honest for
 non-affine ones.
