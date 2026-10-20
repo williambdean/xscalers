@@ -73,16 +73,19 @@ class FunctionTransformer(BaseTransformer):
     """
 
     def __init__(self, mapping: dict[str, str]):
+        """Take ``{variable: op}`` pairs; ops are named unary functions."""
         unknown = {op for op in mapping.values() if op not in _FUNC_INVERSES}
         if unknown:
             raise ValueError(f"Unknown functions {sorted(unknown)}; known: {sorted(_FUNC_INVERSES)}")
         self.mapping = dict(mapping)
 
     def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize the variable-to-op mapping into plain-dict kwargs."""
         return {"mapping": dict(self.mapping)}
 
     @classmethod
     def describe(cls, spec):
+        """One non-affine transformed row per mapped variable."""
         from .serialize import _recipe_line
 
         recipe = _recipe_line({"kind": "FunctionTransformer", "kwargs": spec})
@@ -99,6 +102,7 @@ class FunctionTransformer(BaseTransformer):
         ]
 
     def compute(self, X: Any) -> xr.Dataset:
+        """Record which named function applies per variable (netCDF-safe)."""
         name = getattr(X, "name", None)
         scaled_from = str(name) if name is not None else ""
         # the mapping lives on the *recipe*; each per-variable state carries
@@ -135,14 +139,17 @@ class FixedScaler(BaseAffineTransformer):
     """
 
     def __init__(self, scale: float = 100.0, center: float = 0.0):
+        """Pin the affine pair; no data is consulted."""
         super().__init__(dims=None)
         self.scale = scale
         self.center = center
 
     def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize the constants into plain-dict kwargs."""
         return {"scale": self.scale, "center": self.center}
 
     def compute(self, X: Any) -> xr.Dataset:
+        """Return the constant pair, stamped with what it scales."""
         scaled_from = getattr(X, "name", None)
         return as_state("fixed", None, scaled_from, center=self.center, scale=self.scale)
 
@@ -243,6 +250,10 @@ class Splitter:
     """
 
     def __init__(self, source: str, pieces: Mapping[str, Mapping[str, Any]]):
+        """Take the source variable and ``{piece: {dim: labels}}`` selectors.
+
+        All pieces must split along exactly one shared dim.
+        """
         self.source = source
         # a bare label string means one label, the way Selector/Derive accept
         # ``{"media": "tv"}`` — otherwise a str would be iterated per character
@@ -257,6 +268,7 @@ class Splitter:
         return {dim: [value] if isinstance(value, str) else list(value) for dim, value in sel.items()}
 
     def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize the split recipe into plain-dict kwargs."""
         return {
             "source": self.source,
             "pieces": {piece: dict(sel) for piece, sel in self.pieces.items()},
@@ -265,6 +277,11 @@ class Splitter:
     # -- transformer API ---------------------------------------------------
 
     def fit(self, X: xr.DataTree | xr.Dataset) -> xr.Dataset:
+        """Store the coordinate labels and per-piece positions.
+
+        The state also records the exact output variable names (``piece_vars``)
+        so the affine view matches the container's naming convention.
+        """
         var = self.source.split("/")[-1]
         if isinstance(X, xr.Dataset):
             labels = np.asarray(X[var][self.split_dim].values)
@@ -302,9 +319,12 @@ class Splitter:
         )
 
     def affine_view(self, state: xr.Dataset) -> dict[str, xr.Dataset]:
-        """Identity pairs for the created pieces: the split is a selection,
-        value-preserving, so the composed affine answer composes through it.
-        The source variable is gone post-step, so it gets no pair."""
+        """Identity pairs for the created pieces.
+
+        The split is a selection, value-preserving, so the composed affine
+        answer composes through it. The source variable is gone post-step, so
+        it gets no pair.
+        """
         piece_vars = state.attrs.get("piece_vars")
         if piece_vars is None:  # older state: Dataset naming convention
             var = str(state.attrs["source"]).split("/")[-1]
@@ -315,6 +335,7 @@ class Splitter:
 
     @classmethod
     def describe(cls, spec):
+        """One split row for the source, one created row per piece."""
         from .serialize import _recipe_line
 
         recipe = _recipe_line({"kind": "Splitter", "kwargs": spec})
@@ -343,6 +364,12 @@ class Splitter:
         return rows
 
     def transform(self, X: xr.DataTree | xr.Dataset, state: xr.Dataset):
+        """Replace the source variable with its named pieces.
+
+        Dataset inputs rename each piece's split dim (``{dim}_{piece}``) so
+        sibling variables can coexist; ``inverse_transform`` renames back.
+        DataTree inputs put each piece in its own node under the source.
+        """
         var = self.source.split("/")[-1]
         if isinstance(X, xr.Dataset):
             # Dataset inputs: pieces become sibling variables named
@@ -375,6 +402,7 @@ class Splitter:
         return reassemble(X, out)
 
     def inverse_transform(self, X: xr.DataTree | xr.Dataset, state: xr.Dataset):
+        """Recombine the pieces and restore the original coordinate order."""
         dim = self.split_dim
         stored = list(state[f"labels_{dim}"].values)
         if isinstance(X, xr.Dataset):
@@ -478,6 +506,7 @@ class Derive:
         return str(piece[0]), dict(piece[1])
 
     def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize the derive recipe into JSON-safe kwargs."""
         return {
             "name": self.name,
             "left": {"var": self.left[0], "sel": self._jsonable_sel(self.left[1])},
@@ -519,6 +548,7 @@ class Derive:
     # -- transformer API -------------------------------------------------------
 
     def fit(self, X: Any) -> xr.Dataset:
+        """Validate pieces exist, then record the derived name and op."""
         if not isinstance(X, xr.Dataset):
             raise TypeError("Derive works on Dataset inputs (DataTree derivation deferred)")
         for piece in (self.left, self.right):
@@ -546,6 +576,7 @@ class Derive:
 
     @classmethod
     def describe(cls, spec):
+        """One created row for the derived variable, affine by op."""
         from .serialize import _recipe_line
 
         return [
@@ -560,6 +591,7 @@ class Derive:
         ]
 
     def transform(self, X: Any, state: xr.Dataset) -> Any:
+        """Select the two pieces, apply the op, and append the new variable."""
         if not isinstance(X, xr.Dataset):
             raise TypeError("Derive works on Dataset inputs")
         first = self._piece(X, self.left)
@@ -575,6 +607,7 @@ class Derive:
         return reassemble(X, out)
 
     def inverse_transform(self, X: Any, state: xr.Dataset) -> Any:
+        """Drop the derived variable, restoring the original variables."""
         out = {key: da for key, da in flatten(X).items() if key != state.attrs["derived"]}
         return reassemble(X, out)
 
@@ -584,9 +617,11 @@ class Selector:
     """Select within coordinates per variable. Selection is NOT invertible."""
 
     def __init__(self, mapping: Mapping[str, Mapping[str, Any]]):
+        """Take ``{variable: {dim: labels}}`` selectors per variable."""
         self.mapping = dict(mapping)
 
     def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize the selection mapping into plain-dict kwargs."""
         return {"mapping": {k: self._jsonable_sel(v) for k, v in self.mapping.items()}}
 
     @staticmethod
@@ -594,9 +629,11 @@ class Selector:
         return {dim: list(value) if isinstance(value, (list, tuple)) else value for dim, value in sel.items()}
 
     def fit(self, X: Any) -> xr.Dataset:
+        """Record no state: the recipe is the whole selection decision."""
         return _stamp_state(as_state("selector", None, scaled_from=None), self)
 
     def transform(self, X: Any, state: xr.Dataset) -> Any:
+        """``.sel`` each mapped variable down to its requested labels."""
         out = {}
         for key, da in flatten(X).items():
             sel = dict(self.mapping).get(key)
@@ -606,6 +643,7 @@ class Selector:
         return reassemble(X, out)
 
     def inverse_transform(self, X: Any, state: xr.Dataset) -> Any:
+        """Selection drops data; raising is the contract, not a guess."""
         raise NonInvertibleError(
             "Selection drops data; inverse_transform cannot restore it. Pass "
             "pieces as separate variables, or use Splitter for a reversible split."
@@ -614,10 +652,9 @@ class Selector:
 
 @register
 class VariableDropper:
-    """Drop whole variables and/or coordinate values. Dropping is NOT
-    invertible.
+    """Drop whole variables and/or coordinate values.
 
-    Two orthogonal modes, usable together:
+    Dropping is NOT invertible. Two orthogonal modes, usable together:
 
     - ``vars``: names of whole variables to remove. This is the drop verb
       for a Dataset — sklego's ``ColumnDropper`` over ``drop_vars``.
@@ -628,10 +665,12 @@ class VariableDropper:
     The motivating workflow is pruning raw inputs once a derived metric
     supersedes them::
 
-        Pipeline([
-            ("derive", Derive(name="tv_per_control", left=..., right=..., op="ratio")),
-            ("prune", Dropper(vars=["media", "controls"])),
-        ])
+        Pipeline(
+            [
+                ("derive", Derive(name="tv_per_control", left=..., right=..., op="ratio")),
+                ("prune", Dropper(vars=["media", "controls"])),
+            ]
+        )
 
     ``fit`` is stateless but validates, following sklego: unknown
     variables/labels raise ``KeyError``, dropping every variable raises
@@ -644,6 +683,7 @@ class VariableDropper:
         vars: str | list[str] | None = None,
         labels: Mapping[str, str | list[str]] | None = None,
     ):
+        """Take the drop lists; at least one of ``vars``/``labels`` is required."""
         self.vars = [vars] if isinstance(vars, str) else (list(vars) if vars else [])
         self.labels = {
             dim: [value] if isinstance(value, str) else list(value) for dim, value in (labels or {}).items()
@@ -652,6 +692,7 @@ class VariableDropper:
             raise ValueError("Dropper needs at least one of vars= or labels= to drop")
 
     def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize the drop lists into plain-dict kwargs."""
         return {
             "vars": list(self.vars),
             "labels": {dim: list(values) for dim, values in self.labels.items()},
@@ -659,6 +700,7 @@ class VariableDropper:
 
     @classmethod
     def describe(cls, spec):
+        """One non-affine dropped row per removed variable."""
         from .serialize import _recipe_line
 
         recipe = _recipe_line({"kind": "VariableDropper", "kwargs": spec})
@@ -675,6 +717,7 @@ class VariableDropper:
         ]
 
     def fit(self, X: Any) -> xr.Dataset:
+        """Validate the drop lists against ``X``, then record them for audit."""
         if not isinstance(X, xr.Dataset):
             raise TypeError(
                 f"Dropper takes an xr.Dataset, got {type(X).__name__}; DataTree node drops are deferred."
@@ -708,6 +751,7 @@ class VariableDropper:
         )
 
     def transform(self, X: Any, state: xr.Dataset) -> Any:
+        """``drop_vars`` the listed variables, then ``drop_sel`` the labels."""
         out = X
         if self.vars:
             out = out.drop_vars(self.vars)
@@ -716,6 +760,7 @@ class VariableDropper:
         return out
 
     def inverse_transform(self, X: Any, state: xr.Dataset) -> Any:
+        """Dropping removes data; raising is the contract, not a guess."""
         raise NonInvertibleError(
             "Dropping removes data; inverse_transform cannot restore it. Keep the "
             "raw variables as separate pipeline inputs, or use Splitter for a "

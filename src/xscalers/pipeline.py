@@ -40,14 +40,17 @@ class BoundStep:
     __slots__ = ("name", "state", "transformer")
 
     def __init__(self, name: str, transformer: Any, state: Any):
+        """Bind ``transformer`` to the fitted ``state`` under ``name``."""
         self.name = name
         self.transformer = transformer
         self.state = state
 
     def transform(self, X: Any) -> Any:
+        """Apply the bound step's transform to ``X`` using its fitted state."""
         return self.transformer.transform(X, self.state)
 
     def inverse_transform(self, X: Any) -> Any:
+        """Invert the bound step's transform on ``X`` using its fitted state."""
         return self.transformer.inverse_transform(X, self.state)
 
 
@@ -55,29 +58,42 @@ class _Passthrough:
     """The ``"passthrough"`` step value: fitted state is empty, transform is identity."""
 
     def fit(self, X: Any) -> xr.Dataset:
+        """Record no state: passthrough transforms nothing."""
         return xr.Dataset()
 
     def transform(self, X: Any, state: Any) -> Any:
+        """Identity: return ``X`` unchanged."""
         return X
 
     def inverse_transform(self, X: Any, state: Any) -> Any:
+        """Identity: return ``X`` unchanged."""
         return X
 
     def affine_view(self, state: Any) -> dict[str, Any]:
+        """Empty pair set: passthrough produces no variables."""
         return {}
 
 
 class Pipeline:
+    """Named steps chained with their own fitted states, reversed for inverse.
+
+    Each step keeps its state under its name; ``affine()`` composes the
+    ``(center, scale)`` pair across steps, and ``unscale`` converts scaled
+    contributions back to real units honestly (walking only the steps that
+    produced a variable).
+    """
+
     def __init__(self, steps: list[tuple[str, Any]]):
+        """Take named ``(name, step)`` pairs; ``"passthrough"`` becomes identity."""
         self.steps = [(name, _Passthrough() if step == "passthrough" else step) for name, step in steps]
         self.states_: dict[str, Any] | None = None
 
     def named_steps(self) -> dict[str, Any]:
+        """Steps as a name-keyed dict, sklearn-style."""
         return dict(self.steps)
 
-    # -- sklearn-shaped API ------------------------------------------------
-
     def fit(self, X: Any) -> dict[str, Any]:
+        """Fit every step in order and store the state dict in ``states_``."""
         states: dict[str, Any] = {}
         current = X
         for name, step in self.steps:
@@ -87,24 +103,28 @@ class Pipeline:
         return states
 
     def transform(self, X: Any, state: Mapping[str, Any]) -> Any:
+        """Apply each step in order, threading the data through the chain."""
         current = X
         for name, step in self.steps:
             current = step.transform(current, state[name])
         return current
 
     def inverse_transform(self, X: Any, state: Mapping[str, Any]) -> Any:
+        """Apply each step's inverse in reverse order."""
         current = X
         for name, step in reversed(self.steps):
             current = step.inverse_transform(current, state[name])
         return current
 
     def fit_transform(self, X: Any) -> Any:
+        """Fit on ``X`` and return the transformed data."""
         state = self.fit(X)
         return self.transform(X, state)
 
     # -- post-fit step access ------------------------------------------------
 
     def __getitem__(self, key: str) -> BoundStep:
+        """Access one fitted step: ``pipe["name"]`` as a BoundStep."""
         if self.states_ is None:
             raise RuntimeError("Pipeline is not fitted; call fit() before step access")
         steps = self.named_steps()
@@ -195,16 +215,19 @@ class Pipeline:
     # -- state artifact ------------------------------------------------------
 
     def to_state_tree(self, state: Mapping[str, Any]) -> xr.DataTree:
+        """Assemble the pipeline state into a single-leaf-per-step DataTree."""
         return state_tree(state)
 
     # -- spec serialization ---------------------------------------------------
 
     def to_spec(self) -> dict[str, Any]:
+        """Serialize into a plain-dict recipe spec, steps specs included."""
         steps = [[name, to_spec(step)] for name, step in self.steps]
         return {"kind": "Pipeline", "kwargs": {"steps": steps}}
 
     @classmethod
     def from_spec(cls, spec: Mapping[str, Any]) -> Pipeline:
+        """Rebuild a Pipeline from a ``to_spec`` recipe."""
         steps = [
             (name, from_spec(step) if step != "passthrough" else step)
             for name, step in spec["kwargs"]["steps"]
@@ -252,8 +275,10 @@ class Union:
         branches: list[tuple[str, Any]],
         collisions: str = "require_equal",
     ):
+        """Take named ``(name, branch)`` pairs and the collision policy."""
         if collisions not in {"require_equal", "error", "keep_first"}:
             raise ValueError(f"collisions must be require_equal | error | keep_first; got {collisions!r}")
+        # de-duplicate branch names the same way make_pipeline does
         seen: dict[str, int] = {}
         resolved: list[tuple[str, Any]] = []
         for name, transformer in branches:
@@ -267,6 +292,7 @@ class Union:
     # -- sklearn-composite API -----------------------------------------------
 
     def fit(self, X: Any) -> dict[str, Any]:
+        """Fit every branch against the same input ``X``."""
         states: dict[str, Any] = {}
         for name, branch in self.branches:
             states[name] = branch.fit(X)
@@ -274,6 +300,7 @@ class Union:
         return states
 
     def transform(self, X: Any, state: Mapping[str, Any]) -> Any:
+        """Transform ``X`` through every branch and merge the outputs."""
         merged: dict[str, Any] = {}
         for name, branch in self.branches:
             out = branch.transform(X, state[name])
@@ -281,9 +308,12 @@ class Union:
         return _reassemble(X, merged)
 
     def inverse_transform(self, X: Any, state: Mapping[str, Any]) -> Any:
-        # per-branch inverse; a variable dropped by ANY branch is dropped from
-        # the result (each branch removes its own derived vars), and variables
-        # surviving in every branch must restore identically
+        """Invert every branch on ``X`` and merge, dropping lost variables.
+
+        A variable dropped by any branch is dropped from the result (each
+        branch removes its own derived vars); variables surviving in every
+        branch must restore identically.
+        """
         dropped: set[str] = set()
         outputs: list[Mapping[str, Any]] = []
         for name, branch in reversed(self.branches):
@@ -294,6 +324,7 @@ class Union:
         return _reassemble(X, out)
 
     def fit_transform(self, X: Any) -> Any:
+        """Fit on ``X`` and return the merged transformed data."""
         state = self.fit(X)
         return self.transform(X, state)
 
@@ -326,6 +357,7 @@ class Union:
             )
 
     def __getitem__(self, key: str) -> BoundStep:
+        """Access one fitted branch: ``union["name"]`` as a BoundStep."""
         if self.states_ is None:
             raise RuntimeError("Union is not fitted; call fit() before step access")
         steps = dict(self.branches)
@@ -347,7 +379,6 @@ class Union:
         "refuse rather than return a wrong pair" policy as
         :meth:`Pipeline.affine`, per variable rather than per structure.
         """
-
         composed: dict[str, xr.Dataset] = {}
         owners: dict[str, str] = {}
         for (name, branch), branch_state in zip(self.branches, state.values(), strict=True):
@@ -406,6 +437,7 @@ class Union:
     # -- spec serialization ----------------------------------------------------
 
     def to_spec(self) -> dict[str, Any]:
+        """Serialize into a plain-dict recipe spec, branch specs included."""
         return {
             "kind": "Union",
             "kwargs": {
@@ -416,6 +448,7 @@ class Union:
 
     @classmethod
     def from_spec(cls, spec: Mapping[str, Any]) -> Union:
+        """Rebuild a Union from a ``to_spec`` recipe."""
         branches = [
             (name, from_spec(spec_branch) if spec_branch != "passthrough" else spec_branch)
             for name, spec_branch in spec["kwargs"]["branches"]
@@ -424,7 +457,7 @@ class Union:
 
 
 def make_union(*branches: Any, collisions: str = "require_equal") -> Union:
-    """sklearn's ``make_union``: auto-name branches from transformer classes.
+    """Sklearn's ``make_union``: auto-name branches from transformer classes.
 
     Names derive from transformer or Pipeline class names (``zscore``,
     ``zscore-1``, ``pipeline``); pass ``("name", transformer)`` tuples to pin

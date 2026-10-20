@@ -184,11 +184,13 @@ class BaseTransformer(ABC):
 
     @classmethod
     def describe(cls, spec: Mapping[str, Any]) -> list[dict[str, Any]]:
-        """Provenance rows this kind contributes: the protocol ``provenance``
-        walks. Spec kwargs in, plain dicts out. Default: one transformed row
+        """Provenance rows this kind contributes to the ``provenance`` walk.
+
+        Spec kwargs in, plain dicts out. Default: one transformed row
         with no known variable; step-shaped transformers (splitters, derivers,
         droppers, function maps) override to declare their variables, roles,
-        and ops, so customs are first-class without library edits."""
+        and ops, so customs are first-class without library edits.
+        """
         from .serialize import _recipe_line
 
         return [
@@ -205,6 +207,7 @@ class BaseTransformer(ABC):
     dims: tuple[str, ...] | None
 
     def __init__(self, dims: tuple[str, ...] | str | None = None):
+        """Store the reduce-over dims; a bare string becomes a 1-tuple."""
         self.dims = (dims,) if isinstance(dims, str) else dims
 
     @abstractmethod
@@ -230,6 +233,10 @@ class BaseTransformer(ABC):
         return _stamp_state(VariableTransformer(remainder=self).fit(X), self)
 
     def transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        """Apply the fitted arithmetic to ``X``.
+
+        Direct for scalarish inputs, dispatched per variable for containers.
+        """
         from .compose import VariableTransformer
 
         if self.__scalarish(X):
@@ -237,6 +244,10 @@ class BaseTransformer(ABC):
         return VariableTransformer(remainder=self).transform(X, state)
 
     def inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        """Invert the transform on ``X``.
+
+        Direct for scalarish inputs, dispatched per variable for containers.
+        """
         from .compose import VariableTransformer
 
         if self.__scalarish(X):
@@ -249,6 +260,7 @@ class BaseTransformer(ABC):
         return not isinstance(X, xr.Dataset)
 
     def to_spec(self) -> dict[str, Any]:
+        """Serialize this transformer into a plain-dict recipe spec."""
         from .serialize import spec_of
 
         return spec_of(self)

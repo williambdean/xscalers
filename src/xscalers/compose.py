@@ -36,6 +36,7 @@ class VariableTransformer:
     def __init__(
         self, mapping: Mapping[str, Any] | None = None, remainder: Any = "passthrough", default: Any = None
     ):
+        """Build the dispatch table from the mapping and remainder policy."""
         self.mapping = dict(mapping or {})
         self.remainder = default if default is not None else remainder
 
@@ -59,6 +60,11 @@ class VariableTransformer:
     # -- transformer API ---------------------------------------------------
 
     def fit(self, X: Any) -> dict[str, Any]:
+        """Fit each mapped variable with its own scaler.
+
+        Returns a mapping from variable key to that scaler's stamped state.
+        Unmapped variables get the remainder policy and produce no state.
+        """
         items = flatten(X)
         self._warn_on_missing_keys(items)
         states: dict[str, Any] = {}
@@ -103,6 +109,10 @@ class VariableTransformer:
             )
 
     def transform(self, X: Any, state: Mapping[str, Any] | xr.Dataset) -> Any:
+        """Scale each mapped variable with its fitted state.
+
+        Unknown or passthrough variables pass through unchanged.
+        """
         out: dict[str, Any] = {}
         for key, da in flatten(X).items():
             scaler = self._scaler_for(key)
@@ -116,6 +126,10 @@ class VariableTransformer:
         return reassemble(X, out)
 
     def inverse_transform(self, X: Any, state: Mapping[str, Any] | xr.Dataset) -> Any:
+        """Unscale each mapped variable back to its original units.
+
+        Dropped variables are not restored, mirroring ``transform``.
+        """
         out: dict[str, Any] = {}
         for key, da in flatten(X).items():
             scaler = self._scaler_for(key)
@@ -172,6 +186,7 @@ class VariableTransformer:
         return views
 
     def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize the mapping and remainder into plain-dict spec kwargs."""
         from .core import to_spec
 
         # "passthrough" (and any other bare string) is a documented value, not

@@ -39,8 +39,11 @@ def _dates(n: int) -> pd.DatetimeIndex:
 
 
 def load_national() -> xr.Dataset:
-    """``target`` and ``controls`` at ``(date,)``, ``media`` at
-    ``(date, channel)``."""
+    """Load the national-grain example dataset.
+
+    ``target`` and ``controls`` sit at ``(date,)``, ``media`` at
+    ``(date, channel)``.
+    """
     rng = np.random.default_rng(12)
     trend = np.linspace(90, 110, 104)
     return xr.Dataset(
@@ -97,10 +100,12 @@ def load_mixed_grain() -> xr.Dataset:
 
 
 def load_media_channels() -> xr.Dataset:
-    """One ``media (date, channel)`` variable needing split treatment,
-    alongside controls — as a single Dataset of variables (the common shape;
+    """Load one ``media (date, channel)`` variable needing split treatment.
+
+    Controls sit alongside as a single Dataset of variables (the common shape;
     DataTree inputs remain supported by the library, but real raw inputs are
-    usually just datasets)."""
+    usually just datasets).
+    """
     rng = np.random.default_rng(7)
     n = 60
     return xr.Dataset(
@@ -113,8 +118,9 @@ def load_media_channels() -> xr.Dataset:
 
 
 def load_panel() -> xr.Dataset:
-    """A ``(date, product)`` panel whose inputs sit at *two grains*, each
-    variable on its own dim name.
+    """Load a ``(date, product)`` panel whose inputs sit at two grains.
+
+    Each variable is on its own dim name:
 
     - ``media_national (date, channel)`` — one series per channel, shared by
       every product. Lifting it to product grain is an upstream xarray op (see
