@@ -454,7 +454,8 @@ back = bound.inverse_transform(scaled_again)     # ...and its inverse
 ## For sklearn users
 
 sklearn vocabulary: `fit` / `transform` / `inverse_transform` / `Pipeline`,
-`ColumnTransformer`-style per-variable treatment (that's `VariableTransformer`), `make_pipeline`,
+`ColumnTransformer`-style per-variable treatment (that's `VariableTransformer`), `make_pipeline`
+(the composition verb — no Kedro-style `>>` chaining, it hides the recipe/state split),
 **`make_union`** (many pipelines over the same dataset, merged with a
 collision policy — covariates-only by design), `"passthrough"` steps. The
 drop verb lives in `VariableDropper` — sklego's `ColumnDropper` over

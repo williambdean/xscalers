@@ -137,5 +137,8 @@ flagship cross-backend parity test passing before any refactor.
 - data_twiller `ScalingPostProcessor` adapter (stacked-scales ↔ Dataset state).
 - More scalers (MinMax, MaxAbs, Robust), learnable symbolic *fit*, getitem /
   bound-step views, recipe persistence sugar.
+- `>>` / `|` operator sugar for composing steps and unions — `make_pipeline`
+  / `make_union` are the way to compose (Kedro-style chaining hides the
+  recipe/state split, and reads like imperative execution).
 - Symbolic `compute` (reductions inside the graph) — xtensor already has
   `mean/std/min/max`, so this needs no new primitives when a use case appears.
