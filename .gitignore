@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 dist/
+site/
 uv.lock
 dogfood_run/
 notebooks/__marimo__/
