@@ -1,4 +1,4 @@
-.PHONY: help docs serve test lint format build
+.PHONY: help docs serve test lint format build release
 
 .DEFAULT_GOAL := help
 
@@ -24,3 +24,6 @@ docstrings: ## Data-verify the datasets' docstring shape claims
 
 format: ## Apply ruff formatting
 	uv run ruff format src tests
+
+release: ## Create a GitHub release (publish.yml publishes to PyPI)
+	gh release create --generate-notes "v$(shell grep -E '^version' pyproject.toml | sed 's/[^0-9.]*//g')"
