@@ -19,5 +19,8 @@ lint: ## Run ruff and mypy
 	uv run ruff format --check src tests
 	uv run mypy src
 
+docstrings: ## Data-verify the datasets' docstring shape claims
+	uv run python scripts/check_dataset_docstrings.py
+
 format: ## Apply ruff formatting
 	uv run ruff format src tests

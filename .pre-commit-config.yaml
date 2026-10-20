@@ -20,3 +20,14 @@ repos:
   - repo: meta
     hooks:
       - id: check-useless-excludes
+
+  # data-verified docstrings: the example datasets' shape claims against
+  # the data the loaders actually produce (scripts/check_dataset_docstrings.py)
+  - repo: local
+    hooks:
+      - id: dataset-docstrings
+        name: dataset docstring shape claims
+        entry: uv run python scripts/check_dataset_docstrings.py
+        language: system
+        pass_filenames: false
+        files: ^(src/xscalers/datasets\.py|scripts/check_dataset_docstrings\.py)$
