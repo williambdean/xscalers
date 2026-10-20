@@ -268,9 +268,14 @@ class Splitter:
         var = self.source.split("/")[-1]
         if isinstance(X, xr.Dataset):
             labels = np.asarray(X[var][self.split_dim].values)
+            # Dataset outputs: sibling variables {var}_{piece} (see transform)
+            piece_vars = [f"{var}_{piece}" for piece in self.pieces]
         elif isinstance(X, xr.DataTree):
             node = _node_of(X, self.source)
             labels = np.asarray(node[var][self.split_dim].values)
+            # DataTree outputs: piece nodes under the source node; keys are
+            # node paths, matching how transform/flatten name them
+            piece_vars = [f"{self.source}/{piece}" for piece in self.pieces]
         else:
             raise TypeError("Splitter works on Dataset or DataTree inputs")
         entries: dict[str, Any] = {f"labels_{self.split_dim}": xr.DataArray(labels, dims=("labels_index",))}
@@ -283,11 +288,31 @@ class Splitter:
                 "splitter",
                 None,
                 scaled_from=self.source,
-                attrs={"source": self.source, "split_dim": self.split_dim, "pieces": sorted(self.pieces)},
+                attrs={
+                    "source": self.source,
+                    "split_dim": self.split_dim,
+                    "pieces": sorted(self.pieces),
+                    # the exact output variable names this fit produces, so
+                    # affine_view (state-side) matches the container's naming
+                    "piece_vars": list(piece_vars),
+                },
                 **entries,
             ),
             self,
         )
+
+    def affine_view(self, state: xr.Dataset) -> dict[str, xr.Dataset]:
+        """Identity pairs for the created pieces: the split is a selection,
+        value-preserving, so the composed affine answer composes through it.
+        The source variable is gone post-step, so it gets no pair."""
+        piece_vars = state.attrs.get("piece_vars")
+        if piece_vars is None:  # older state: Dataset naming convention
+            var = str(state.attrs["source"]).split("/")[-1]
+            piece_vars = [f"{var}_{piece}" for piece in state.attrs["pieces"]]
+        return {
+            name: xr.Dataset({"center": xr.DataArray(0.0), "scale": xr.DataArray(1.0)})
+            for name in piece_vars
+        }
 
     @classmethod
     def describe(cls, spec):

@@ -88,11 +88,21 @@ class TestSplitter:
         media = back.children["media"].dataset["media"]
         assert np.allclose(media.values, split_tree.children["media"].dataset["media"].values)
 
-    def test_pipeline_affine_raises_because_of_split(self, split_tree):
+    def test_pipeline_affine_composes_through_split(self, split_tree):
+        """The split is a value-preserving selection (affine identity), so
+        the composed (center, scale) composes through it to each piece."""
         pipe = _pipe()
         state = pipe.fit(split_tree)
-        with pytest.raises(TypeError):
-            pipe.affine(state)
+        composed = pipe.affine(state)
+        # FixedScaler piece: the constant pair carries through the split
+        piece = composed["media/tv"]
+        assert np.allclose(float(piece["scale"]), 1_000.0)
+        # MeanScaler piece: per-channel means are the scale
+        piece = composed["media/digital"]
+        assert np.allclose(
+            piece["scale"].values, state["scale"]["media/digital"]["mean"].values
+        )
+        assert sorted(composed) == ["media/digital", "media/tv"]  # no junk keys
 
     def test_a_bare_label_string_means_one_label(self, split_tree):
         """The way Selector/Derive accept ``{"media": "tv"}``: a bare string

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
+
 from xscalers import preprocessing as pp
 from xscalers.compose import VariableTransformer
 from xscalers.core import BaseAffineTransformer, BaseTransformer, as_state, register
@@ -219,3 +221,30 @@ class TestTable:
         row = table.sel(step="scale_media", variable="media_digital")
         assert row["recipe"].item() == "MeanScaler(dims=['date'])"
 
+
+class TestComposesThroughDataMovement:
+    """Identity affine_views on data-movement steps make the composed pair
+    real for the pieces they create; citizenship is one protocol."""
+
+    def test_pipe_affine_works_on_splitter_pipeline(self):
+        from xscalers.datasets import load_media_channels
+
+        pipe = national_pipe()
+        ds = load_media_channels()
+        state = pipe.fit(ds)
+        composed = pipe.affine(state)
+        assert np.allclose(composed["media_direct"]["scale"].values, 1_000.0)
+        # the MeanScaler's per-channel scale carries through the splitter
+        assert np.allclose(
+            composed["media_digital"]["scale"].values,
+            state["scale_media"]["media_digital"]["mean"].values,
+        )
+
+    def test_data_movement_rows_flag_by_protocol(self):
+        table = provenance(national_spec())
+        for variable in ("media", "media_direct"):
+            row = table.sel(step="split", variable=variable)
+            assert bool(row["affine"].item()) is True
+        derived = provenance(derived_spec())
+        prune = derived.sel(step="prune", variable="media_national")
+        assert bool(prune["affine"].item()) is False  # dropping removes values
