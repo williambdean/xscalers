@@ -102,3 +102,64 @@ class TestStateNetcdf:
         )
         assert np.allclose(out.values, expected.values)
         assert loaded.attrs["kind"] == "zscore"
+
+
+class TestProvenanceStamps:
+    """README-advertised inspection: every fitted state leaf answers "what has
+    been done to this variable" via attrs — ``recipe`` (human one-liner) and
+    ``spec_sha`` (fingerprint). These tests lock that contract down."""
+
+    def test_pipeline_leaves_carry_recipe_stamps(self, national_ds):
+        from xscalers.core import spec_sha
+
+        pipe = Pipeline([
+            ("scale", VariableTransformer({
+                "target": preprocessing.ZScore(dims=("date",)),
+                "media": preprocessing.MeanScaler(dims=("date",)),
+            })),
+        ])
+        leaves = pipe.fit(national_ds)["scale"]
+        assert leaves["target"].attrs["recipe"] == "ZScore(dims=['date'])"
+        assert leaves["target"].attrs["spec_sha"] == spec_sha(
+            preprocessing.ZScore(dims=("date",))
+        )
+        assert leaves["media"].attrs["recipe"] == "MeanScaler(dims=['date'])"
+
+    def test_non_affine_op_stamp_names_the_function(self, national_ds):
+        pipe = Pipeline([
+            ("choose", VariableTransformer({
+                "target": preprocessing.FunctionTransformer({"target": "log"}),
+            })),
+        ])
+        leaf = pipe.fit(national_ds)["choose"]["target"]
+        assert leaf.attrs["op"] == "log"
+        assert leaf.attrs["recipe"] == "FunctionTransformer(mapping={'target': 'log'})"
+
+    def test_stamps_survive_datatree_netcdf_roundtrip(self, national_ds, tmp_path):
+        from xscalers.container import state_tree
+
+        pipe = Pipeline([
+            ("choose", VariableTransformer({
+                "target": preprocessing.FunctionTransformer({"target": "log"}),
+            })),
+            ("scale", VariableTransformer({
+                "target": preprocessing.ZScore(dims=("date",)),
+                "media": preprocessing.MeanScaler(dims=("date",)),
+            })),
+        ])
+        path = tmp_path / "state.nc"
+        state_tree(pipe.fit(national_ds)).to_netcdf(path)
+        loaded = xr.open_datatree(path)
+        assert loaded["choose"]["target"].attrs["recipe"] == (
+            "FunctionTransformer(mapping={'target': 'log'})"
+        )
+        assert loaded["scale"]["media"].attrs["spec_sha"]
+        # replay with the reloaded state reproduces scaled values; the log op
+        # lives in the earlier step's state, so both steps apply
+        logged = preprocessing.FunctionTransformer({"target": "log"}).transform(
+            national_ds["target"], loaded["choose"]["target"]
+        )
+        out = preprocessing.ZScore().transform(logged, loaded["scale"]["target"])
+        lg = np.log(national_ds["target"])
+        expected = (lg - lg.mean("date")) / lg.std("date", ddof=0)
+        assert np.allclose(out.values, expected.values)
