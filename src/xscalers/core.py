@@ -182,6 +182,26 @@ def as_state(
 class BaseTransformer(ABC):
     """The xscalers contract, sklearn vocabulary over ecosystem-native objects."""
 
+    @classmethod
+    def describe(cls, spec: Mapping[str, Any]) -> list[dict[str, Any]]:
+        """Provenance rows this kind contributes: the protocol ``provenance``
+        walks. Spec kwargs in, plain dicts out. Default: one transformed row
+        with no known variable; step-shaped transformers (splitters, derivers,
+        droppers, function maps) override to declare their variables, roles,
+        and ops, so customs are first-class without library edits."""
+        from .serialize import _recipe_line
+
+        return [
+            {
+                "variable": None,
+                "role": "transformed",
+                "kind": cls.__name__,
+                "recipe": _recipe_line({"kind": cls.__name__, "kwargs": dict(spec)}),
+                "op": "",
+                "affine": hasattr(cls, "affine_view"),
+            }
+        ]
+
     dims: tuple[str, ...] | None
 
     def __init__(self, dims: tuple[str, ...] | str | None = None):

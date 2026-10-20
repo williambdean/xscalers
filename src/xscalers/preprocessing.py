@@ -81,6 +81,23 @@ class FunctionTransformer(BaseTransformer):
     def to_spec_kwargs(self) -> dict[str, Any]:
         return {"mapping": dict(self.mapping)}
 
+    @classmethod
+    def describe(cls, spec):
+        from .serialize import _recipe_line
+
+        recipe = _recipe_line({"kind": "FunctionTransformer", "kwargs": spec})
+        return [
+            {
+                "variable": variable,
+                "role": "transformed",
+                "kind": "FunctionTransformer",
+                "recipe": recipe,
+                "op": str(op),
+                "affine": False,
+            }
+            for variable, op in spec["mapping"].items()
+        ]
+
     def compute(self, X: Any) -> xr.Dataset:
         name = getattr(X, "name", None)
         scaled_from = str(name) if name is not None else ""
@@ -271,6 +288,35 @@ class Splitter:
             ),
             self,
         )
+
+    @classmethod
+    def describe(cls, spec):
+        from .serialize import _recipe_line
+
+        recipe = _recipe_line({"kind": "Splitter", "kwargs": spec})
+        rows = [
+            {
+                "variable": str(spec["source"]).split("/")[-1],
+                "role": "split",
+                "kind": "Splitter",
+                "recipe": recipe,
+                "op": "",
+                "affine": True,
+            }
+        ]
+        var = str(spec["source"]).split("/")[-1]
+        rows += [
+            {
+                "variable": f"{var}_{piece}",
+                "role": "created",
+                "kind": "Splitter",
+                "recipe": recipe,
+                "op": "",
+                "affine": True,
+            }
+            for piece in spec["pieces"]
+        ]
+        return rows
 
     def transform(self, X: xr.DataTree | xr.Dataset, state: xr.Dataset):
         var = self.source.split("/")[-1]
@@ -474,6 +520,21 @@ class Derive:
             self,
         )
 
+    @classmethod
+    def describe(cls, spec):
+        from .serialize import _recipe_line
+
+        return [
+            {
+                "variable": spec["name"],
+                "role": "created",
+                "kind": "Derive",
+                "recipe": _recipe_line({"kind": "Derive", "kwargs": spec}),
+                "op": str(spec.get("op", "") or ""),
+                "affine": True,
+            }
+        ]
+
     def transform(self, X: Any, state: xr.Dataset) -> Any:
         if not isinstance(X, xr.Dataset):
             raise TypeError("Derive works on Dataset inputs")
@@ -572,6 +633,23 @@ class VariableDropper:
             "labels": {dim: list(values) for dim, values in self.labels.items()},
         }
 
+    @classmethod
+    def describe(cls, spec):
+        from .serialize import _recipe_line
+
+        recipe = _recipe_line({"kind": "VariableDropper", "kwargs": spec})
+        return [
+            {
+                "variable": variable,
+                "role": "dropped",
+                "kind": "VariableDropper",
+                "recipe": recipe,
+                "op": "",
+                "affine": False,
+            }
+            for variable in spec["vars"]
+        ]
+
     def fit(self, X: Any) -> xr.Dataset:
         if not isinstance(X, xr.Dataset):
             raise TypeError(
@@ -646,6 +724,23 @@ class Renamer:
 
     def transform(self, X: Any, state: Any) -> Any:
         return X.rename(self.mapping)
+
+    @classmethod
+    def describe(cls, spec):
+        from .serialize import _recipe_line
+
+        recipe = _recipe_line({"kind": "Renamer", "kwargs": spec})
+        return [
+            {
+                "variable": new_name,
+                "role": "renamed",
+                "kind": "Renamer",
+                "recipe": recipe,
+                "op": "",
+                "affine": True,
+            }
+            for new_name in spec["mapping"].values()
+        ]
 
     def inverse_transform(self, X: Any, state: Any) -> Any:
         reverse = {v: k for k, v in self.mapping.items()}

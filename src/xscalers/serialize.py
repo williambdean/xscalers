@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-__all__ = ["from_spec", "spec_of", "to_spec"]
+__all__ = ["from_spec", "provenance", "spec_of", "to_spec"]
+
 
 
 def to_spec(transformer: Any) -> dict[str, Any]:
@@ -65,6 +66,94 @@ def _from_spec_value(value: Any) -> Any:
     if isinstance(value, list) and value and all(isinstance(v, str) for v in value):
         return tuple(value)
     return value
+
+
+def _is_spec(value):
+    return isinstance(value, Mapping) and "kind" in value
+
+
+def _recipe_line(spec: Mapping[str, Any]) -> str:
+    from .core import _recipe_from_spec
+
+    return _recipe_from_spec(spec)
+
+
+def provenance(spec: Mapping[str, Any]) -> Any:
+    """Machine-readable lineage: a (step, variable) table from a recipe spec.
+
+    Pure configuration: no fitted state, no objects. Rows exist only for
+    variables a step touches; absence IS the answer for "untouched by".
+    Columns: ``recipe`` (one-liner), ``kind``, ``op`` (named elementwise
+    functions), ``affine`` (contributes an exact affine answer; data
+    movement counts as identity), ``role`` (transformed / created / split /
+    dropped). Unknown kinds land affine=False: refusal is the default.
+    """
+    import xarray as xr
+
+    if spec.get("kind") != "Pipeline":
+        raise TypeError(f"provenance expects a Pipeline spec, got {spec.get('kind')!r}")
+
+    rows: dict[str, list] = {"recipe": [], "kind": [], "op": [], "affine": [], "role": []}
+    steps: list[str] = []
+    row_keys: list[tuple[str, str]] = []
+    variables: set[str] = set()
+
+    def row(step, variable, *, kind, recipe, op, affine, role):
+        steps.append(step)
+        row_keys.append((step, variable))
+        variables.add(variable)
+        rows["recipe"].append(recipe)
+        rows["kind"].append(kind)
+        rows["op"].append(op)
+        rows["affine"].append(affine)
+        rows["role"].append(role)
+
+    from .core import REGISTRY
+
+    for step_name, step_spec in spec["kwargs"]["steps"]:
+        kind = step_spec["kind"]
+        kw = step_spec["kwargs"]
+        step_cls = REGISTRY.get(kind)
+        described = step_cls.describe(kw) if step_cls is not None else [
+            {
+                "variable": None,
+                "role": "transformed",
+                "kind": kind,
+                "recipe": _recipe_line(step_spec),
+                "op": "",
+                "affine": False,
+            }
+        ]
+        for r in described:
+            row(
+                step_name,
+                str(r.get("variable") or f"<{kind}>"),
+                kind=r["kind"],
+                recipe=r.get("recipe") or _recipe_line(step_spec),
+                op=str(r.get("op", "")),
+                affine=bool(r.get("affine", False)),
+                role=r["role"],
+            )
+
+    import numpy as np
+
+    step_names = list(dict.fromkeys(steps))
+    var_names = sorted(variables)
+    grid = xr.Dataset(coords={"step": step_names, "variable": var_names})
+    si = {s: i for i, s in enumerate(step_names)}
+    vi = {v: i for i, v in enumerate(var_names)}
+    for col, default, dtype in (
+        ("recipe", "", "U256"),
+        ("kind", "", "U64"),
+        ("op", "", "U32"),
+        ("affine", False, bool),
+        ("role", "", "U32"),
+    ):
+        arr = np.full((len(step_names), len(var_names)), default, dtype=dtype)
+        for (step, variable), value in zip(row_keys, rows[col], strict=True):
+            arr[si[step], vi[variable]] = value
+        grid[col] = (("step", "variable"), arr)
+    return grid
 
 
 class SpecMixin:

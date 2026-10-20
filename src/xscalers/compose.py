@@ -126,6 +126,32 @@ class VariableTransformer:
                 out[key] = scaler.inverse_transform(da, st)
         return reassemble(X, out)
 
+    @classmethod
+    def describe(cls, spec):
+        """One row per mapped variable: the leaf class describes itself."""
+        from .core import REGISTRY
+        from .serialize import _recipe_line
+
+        rows: list[dict[str, Any]] = []
+        for variable, leaf in spec["mapping"].items():
+            if not isinstance(leaf, Mapping) or "kind" not in leaf:
+                continue  # passthrough strings leave no rows
+            leaf_cls = REGISTRY.get(leaf["kind"])
+            if leaf_cls is not None:
+                rows.extend({**r, "variable": variable} for r in leaf_cls.describe(leaf["kwargs"]))
+            else:
+                rows.append(
+                    {
+                        "variable": variable,
+                        "role": "transformed",
+                        "kind": leaf["kind"],
+                        "recipe": _recipe_line(leaf),
+                        "op": "",
+                        "affine": False,
+                    }
+                )
+        return rows
+
     def affine_view(self, state: Mapping[str, Any]) -> dict[str, Any]:
         """Per-variable affine views from this step's states.
 

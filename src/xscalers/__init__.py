@@ -38,7 +38,7 @@ from .preprocessing import (
     VariableDropper,
     ZScore,
 )
-from .serialize import from_spec, to_spec
+from .serialize import from_spec, provenance, to_spec
 
 __all__ = [
     "REGISTRY",
@@ -73,6 +73,7 @@ __all__ = [
     "load_panel",
     "make_pipeline",
     "make_union",
+    "provenance",
     "reassemble",
     "register",
     "state_tree",
