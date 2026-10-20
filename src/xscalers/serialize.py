@@ -8,7 +8,6 @@ from typing import Any
 __all__ = ["from_spec", "provenance", "spec_of", "to_spec"]
 
 
-
 def to_spec(transformer: Any) -> dict[str, Any]:
     """Serialize a transformer recipe to a plain dict (JSON-serializable)."""
     # containers (Pipeline, Union) override ``to_spec`` with a nested spec of
@@ -114,16 +113,20 @@ def provenance(spec: Mapping[str, Any]) -> Any:
         kind = step_spec["kind"]
         kw = step_spec["kwargs"]
         step_cls = REGISTRY.get(kind)
-        described = step_cls.describe(kw) if step_cls is not None else [
-            {
-                "variable": None,
-                "role": "transformed",
-                "kind": kind,
-                "recipe": _recipe_line(step_spec),
-                "op": "",
-                "affine": False,
-            }
-        ]
+        described = (
+            step_cls.describe(kw)
+            if step_cls is not None
+            else [
+                {
+                    "variable": None,
+                    "role": "transformed",
+                    "kind": kind,
+                    "recipe": _recipe_line(step_spec),
+                    "op": "",
+                    "affine": False,
+                }
+            ]
+        )
         for r in described:
             row(
                 step_name,

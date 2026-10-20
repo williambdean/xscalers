@@ -135,10 +135,7 @@ class TestTable:
         logged = table.sel(step="log", variable="tv_per_control")
         assert logged["op"].item() == "log"
         assert bool(logged["affine"].item()) is False
-        assert (
-            logged["recipe"].item()
-            == "FunctionTransformer(mapping={'tv_per_control': 'log'})"
-        )
+        assert logged["recipe"].item() == "FunctionTransformer(mapping={'tv_per_control': 'log'})"
 
     def test_users_make_their_own(self):
         """A user-made registered transformer is flagged affine by protocol

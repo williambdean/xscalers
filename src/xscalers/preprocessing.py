@@ -310,8 +310,7 @@ class Splitter:
             var = str(state.attrs["source"]).split("/")[-1]
             piece_vars = [f"{var}_{piece}" for piece in state.attrs["pieces"]]
         return {
-            name: xr.Dataset({"center": xr.DataArray(0.0), "scale": xr.DataArray(1.0)})
-            for name in piece_vars
+            name: xr.Dataset({"center": xr.DataArray(0.0), "scale": xr.DataArray(1.0)}) for name in piece_vars
         }
 
     @classmethod

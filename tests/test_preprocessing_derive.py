@@ -99,9 +99,7 @@ class TestSplitter:
         assert np.allclose(float(piece["scale"]), 1_000.0)
         # MeanScaler piece: per-channel means are the scale
         piece = composed["media/digital"]
-        assert np.allclose(
-            piece["scale"].values, state["scale"]["media/digital"]["mean"].values
-        )
+        assert np.allclose(piece["scale"].values, state["scale"]["media/digital"]["mean"].values)
         assert sorted(composed) == ["media/digital", "media/tv"]  # no junk keys
 
     def test_a_bare_label_string_means_one_label(self, split_tree):
