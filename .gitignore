@@ -6,7 +6,6 @@ __pycache__/
 .mypy_cache/
 dist/
 site/
-uv.lock
 dogfood_run/
 notebooks/__marimo__/
 # client-confidential dogfood: kept locally, never tracked

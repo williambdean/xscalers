@@ -128,4 +128,4 @@ filterwarnings = [
 ]
 
 [tool.uv.sources]
-pymc-marketing = { git = "https://github.com/pymc-labs/pymc-marketing", rev = "feat/terms-serialization" }
+pymc-marketing = { git = "https://github.com/pymc-labs/pymc-marketing", rev = "refactor/scaling-fit-transform" }
