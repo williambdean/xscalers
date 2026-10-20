@@ -1,20 +1,23 @@
 """Reproducible example datasets, in the spirit of ``sklearn.datasets``.
 
 Every function is deterministic (fixed seed), so README examples and tests
-produce identical data anywhere. Sizes are deliberately panel-shaped:
+produce identical data anywhere. Sizes are deliberately panel-shaped. Each
+variable's shape is stated as ``var (dims)``; those claims are data-verified
+by ``tests/test_dataset_docstrings.py``:
 
-- :func:`load_national` — one target, one control, and one series per
-  channel: ``target``/``controls`` at ``(date,)``, ``media`` at
-  ``(date, channel)``.
-- :func:`load_mixed_grain` — variables at different grains (national media,
-  geo-grain digital media, product-grain controls), the case that motivated
-  per-variable dispatch and per-variable dims.
-- :func:`load_media_channels` — a single ``media (date, channel)`` variable plus
-  controls in one Dataset, the raw-input shape for split-by-channel treatment
+- :func:`load_national` — ``target (date,)``, ``controls (date,)``, and one
+  series per channel: ``media (date, channel)``.
+- :func:`load_mixed_grain` — ``media_national (date, media)``,
+  ``media_digital (date, geo, media)``, ``media_tv (date, media)``,
+  ``controls_nat (date,)``, ``controls_prod (date, product)``, and
+  ``controls (date, product, control)``: the case that motivated per-variable
+  dispatch and per-variable dims.
+- :func:`load_media_channels` — ``media (date, channel)`` and
+  ``controls (date,)``, the raw-input shape for split-by-channel treatment
   (DataTree inputs remain supported by the library, but real inputs are
   usually just datasets).
 - :func:`load_panel` — a ``(date, product)`` panel with inputs at two grains
-  (shared + per-product) and inputs that differ in character, the case that
+  (shared + per-product) and inputs that differ in character: the case that
   motivates per-variable dispatch at more than one grain.
 """
 
@@ -42,8 +45,7 @@ def _dates(n: int) -> pd.DatetimeIndex:
 def load_national() -> xr.Dataset:
     """Load the national-grain example dataset.
 
-    ``target`` and ``controls`` sit at ``(date,)``, ``media`` at
-    ``(date, channel)``.
+    ``target (date,)``, ``controls (date,)``, ``media (date, channel)``.
     """
     rng = np.random.default_rng(12)
     trend = np.linspace(90, 110, 104)
@@ -62,6 +64,11 @@ def load_national() -> xr.Dataset:
 
 def load_mixed_grain() -> xr.Dataset:
     """Variables at different grains for per-variable dispatch examples.
+
+    Shapes: ``media_national (date, media)``,
+    ``media_digital (date, geo, media)``, ``media_tv (date, media)``,
+    ``controls_nat (date,)``, ``controls_prod (date, product)``, and
+    ``controls (date, product, control)``.
 
     Two shapes matter for derived metrics: ``controls_prod (date, product)``
     is positive, so it can serve as the denominator of a cross-grain ratio
@@ -105,9 +112,9 @@ def load_media_channels() -> xr.Dataset:
 
     ``channel = [search, social, fb, tv, stream]``: the first three are the
     digital pieces and the last two the linear pieces of the ``Splitter``
-    examples. ``controls`` sits alongside as a single Dataset of variables
-    (the common shape; DataTree inputs remain supported by the library, but
-    real raw inputs are usually just datasets).
+    examples. ``controls (date,)`` sits alongside as a single Dataset of
+    variables (the common shape; DataTree inputs remain supported by the
+    library, but real raw inputs are usually just datasets).
     """
     rng = np.random.default_rng(7)
     n = 60
@@ -132,11 +139,12 @@ def load_panel() -> xr.Dataset:
       separate affine pairs.
     - ``media_digital (date, product, digital)`` — per-product, splittable on
       a *different* dim name, because a Dataset holds one coordinate per dim.
-    - ``level`` / ``peer_level`` — magnitudes; the pair a cross-variable index
-      is derived from.
-    - ``flag`` / ``peer_flag`` — 0/1 indicators, and ``share`` — a 0..1
-      proportion. Deliberately different in character from ``level``, which is
-      what per-variable recipes are for.
+    - ``level (date, product)`` / ``peer_level (date, product)`` — magnitudes;
+      the pair a cross-variable index is derived from.
+    - ``flag (date, product)`` / ``peer_flag (date, product)`` — 0/1
+      indicators, and ``share (date, product)`` — a 0..1 proportion.
+      Deliberately different in character from ``level``, which is what
+      per-variable recipes are for.
     - ``target (date, product)`` — the quantity to model, at product grain.
     """
     rng = np.random.default_rng(97)
