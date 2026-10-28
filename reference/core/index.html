@@ -61,6 +61,8 @@
       
     
     
+      <link rel="stylesheet" href="../../stylesheets/xarray.css">
+    
     <script>__md_scope=new URL("../..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
     
       
@@ -1662,7 +1664,7 @@
 <p>States carry <em>statistics</em> — the entries people think in (<code>mean</code>,
 <code>std</code>); <code>PAIR</code> maps the affine <em>roles</em> onto those entries. A role
 with no entry (divisive scalers have no center) defaults to <code>0.0</code>.
-The composed affine <em>view</em> (:meth:<code>affine_view</code>) always carries both
+The composed affine <em>view</em> (<code>affine_view</code>) always carries both
 roles, so downstream contracts (<code>affine()</code>, <code>unscale()</code>) stay total.</p>
 
 
@@ -1715,7 +1717,7 @@ roles, so downstream contracts (<code>affine()</code>, <code>unscale()</code>) s
 </span><span id="xscalers.core.BaseAffineTransformer--source--__span-0-289"><a id="xscalers.core.BaseAffineTransformer--source--__codelineno-0-289" name="xscalers.core.BaseAffineTransformer--source--__codelineno-0-289"></a><span class="sd">    States carry *statistics* — the entries people think in (``mean``,</span>
 </span><span id="xscalers.core.BaseAffineTransformer--source--__span-0-290"><a id="xscalers.core.BaseAffineTransformer--source--__codelineno-0-290" name="xscalers.core.BaseAffineTransformer--source--__codelineno-0-290"></a><span class="sd">    ``std``); ``PAIR`` maps the affine *roles* onto those entries. A role</span>
 </span><span id="xscalers.core.BaseAffineTransformer--source--__span-0-291"><a id="xscalers.core.BaseAffineTransformer--source--__codelineno-0-291" name="xscalers.core.BaseAffineTransformer--source--__codelineno-0-291"></a><span class="sd">    with no entry (divisive scalers have no center) defaults to ``0.0``.</span>
-</span><span id="xscalers.core.BaseAffineTransformer--source--__span-0-292"><a id="xscalers.core.BaseAffineTransformer--source--__codelineno-0-292" name="xscalers.core.BaseAffineTransformer--source--__codelineno-0-292"></a><span class="sd">    The composed affine *view* (:meth:`affine_view`) always carries both</span>
+</span><span id="xscalers.core.BaseAffineTransformer--source--__span-0-292"><a id="xscalers.core.BaseAffineTransformer--source--__codelineno-0-292" name="xscalers.core.BaseAffineTransformer--source--__codelineno-0-292"></a><span class="sd">    The composed affine *view* (``affine_view``) always carries both</span>
 </span><span id="xscalers.core.BaseAffineTransformer--source--__span-0-293"><a id="xscalers.core.BaseAffineTransformer--source--__codelineno-0-293" name="xscalers.core.BaseAffineTransformer--source--__codelineno-0-293"></a><span class="sd">    roles, so downstream contracts (``affine()``, ``unscale()``) stay total.</span>
 </span><span id="xscalers.core.BaseAffineTransformer--source--__span-0-294"><a id="xscalers.core.BaseAffineTransformer--source--__codelineno-0-294" name="xscalers.core.BaseAffineTransformer--source--__codelineno-0-294"></a><span class="sd">    """</span>
 </span><span id="xscalers.core.BaseAffineTransformer--source--__span-0-295"><a id="xscalers.core.BaseAffineTransformer--source--__codelineno-0-295" name="xscalers.core.BaseAffineTransformer--source--__codelineno-0-295"></a>
@@ -1964,7 +1966,7 @@ roles, so downstream contracts (<code>affine()</code>, <code>unscale()</code>) s
 </span><span id="xscalers.core.BaseTransformer--source--__span-0-224"><a id="xscalers.core.BaseTransformer--source--__codelineno-0-224" name="xscalers.core.BaseTransformer--source--__codelineno-0-224"></a><span class="w">        </span><span class="sd">"""Fit: DataArrays (and symbolic inputs) directly; containers via dispatch.</span>
 </span><span id="xscalers.core.BaseTransformer--source--__span-0-225"><a id="xscalers.core.BaseTransformer--source--__codelineno-0-225" name="xscalers.core.BaseTransformer--source--__codelineno-0-225"></a>
 </span><span id="xscalers.core.BaseTransformer--source--__span-0-226"><a id="xscalers.core.BaseTransformer--source--__codelineno-0-226" name="xscalers.core.BaseTransformer--source--__codelineno-0-226"></a><span class="sd">        Stamps ``spec_sha`` provenance onto the returned state leaves</span>
-</span><span id="xscalers.core.BaseTransformer--source--__span-0-227"><a id="xscalers.core.BaseTransformer--source--__codelineno-0-227" name="xscalers.core.BaseTransformer--source--__codelineno-0-227"></a><span class="sd">        (best-effort; see :func:`_stamp_state`).</span>
+</span><span id="xscalers.core.BaseTransformer--source--__span-0-227"><a id="xscalers.core.BaseTransformer--source--__codelineno-0-227" name="xscalers.core.BaseTransformer--source--__codelineno-0-227"></a><span class="sd">        (best-effort; see ``_stamp_state``).</span>
 </span><span id="xscalers.core.BaseTransformer--source--__span-0-228"><a id="xscalers.core.BaseTransformer--source--__codelineno-0-228" name="xscalers.core.BaseTransformer--source--__codelineno-0-228"></a><span class="sd">        """</span>
 </span><span id="xscalers.core.BaseTransformer--source--__span-0-229"><a id="xscalers.core.BaseTransformer--source--__codelineno-0-229" name="xscalers.core.BaseTransformer--source--__codelineno-0-229"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">.compose</span><span class="w"> </span><span class="kn">import</span> <span class="n">VariableTransformer</span>
 </span><span id="xscalers.core.BaseTransformer--source--__span-0-230"><a id="xscalers.core.BaseTransformer--source--__codelineno-0-230" name="xscalers.core.BaseTransformer--source--__codelineno-0-230"></a>
@@ -2206,7 +2208,7 @@ and ops, so customs are first-class without library edits.</p>
 
         <p>Fit: DataArrays (and symbolic inputs) directly; containers via dispatch.</p>
 <p>Stamps <code>spec_sha</code> provenance onto the returned state leaves
-(best-effort; see :func:<code>_stamp_state</code>).</p>
+(best-effort; see <code>_stamp_state</code>).</p>
 
 
             <details class="mkdocstrings-source">
@@ -2225,7 +2227,7 @@ and ops, so customs are first-class without library edits.</p>
 </span><span id="xscalers.core.BaseTransformer.fit--source--__span-0-224"><a id="xscalers.core.BaseTransformer.fit--source--__codelineno-0-224" name="xscalers.core.BaseTransformer.fit--source--__codelineno-0-224"></a><span class="w">    </span><span class="sd">"""Fit: DataArrays (and symbolic inputs) directly; containers via dispatch.</span>
 </span><span id="xscalers.core.BaseTransformer.fit--source--__span-0-225"><a id="xscalers.core.BaseTransformer.fit--source--__codelineno-0-225" name="xscalers.core.BaseTransformer.fit--source--__codelineno-0-225"></a>
 </span><span id="xscalers.core.BaseTransformer.fit--source--__span-0-226"><a id="xscalers.core.BaseTransformer.fit--source--__codelineno-0-226" name="xscalers.core.BaseTransformer.fit--source--__codelineno-0-226"></a><span class="sd">    Stamps ``spec_sha`` provenance onto the returned state leaves</span>
-</span><span id="xscalers.core.BaseTransformer.fit--source--__span-0-227"><a id="xscalers.core.BaseTransformer.fit--source--__codelineno-0-227" name="xscalers.core.BaseTransformer.fit--source--__codelineno-0-227"></a><span class="sd">    (best-effort; see :func:`_stamp_state`).</span>
+</span><span id="xscalers.core.BaseTransformer.fit--source--__span-0-227"><a id="xscalers.core.BaseTransformer.fit--source--__codelineno-0-227" name="xscalers.core.BaseTransformer.fit--source--__codelineno-0-227"></a><span class="sd">    (best-effort; see ``_stamp_state``).</span>
 </span><span id="xscalers.core.BaseTransformer.fit--source--__span-0-228"><a id="xscalers.core.BaseTransformer.fit--source--__codelineno-0-228" name="xscalers.core.BaseTransformer.fit--source--__codelineno-0-228"></a><span class="sd">    """</span>
 </span><span id="xscalers.core.BaseTransformer.fit--source--__span-0-229"><a id="xscalers.core.BaseTransformer.fit--source--__codelineno-0-229" name="xscalers.core.BaseTransformer.fit--source--__codelineno-0-229"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.compose</span><span class="w"> </span><span class="kn">import</span> <span class="n">VariableTransformer</span>
 </span><span id="xscalers.core.BaseTransformer.fit--source--__span-0-230"><a id="xscalers.core.BaseTransformer.fit--source--__codelineno-0-230" name="xscalers.core.BaseTransformer.fit--source--__codelineno-0-230"></a>

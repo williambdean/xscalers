@@ -61,6 +61,8 @@
       
     
     
+      <link rel="stylesheet" href="../stylesheets/xarray.css">
+    
     <script>__md_scope=new URL("..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
     
       
@@ -978,8 +980,8 @@
 
 <h1 id="guides">Guides</h1>
 <p>Hands-on pages for the xscalers workflow, adapted from the README. Every
-code block is the same vocabulary you will use in a notebook or script, and
-the test suite executes them just like the README's blocks.</p>
+executable code block runs at docs build time and shows its real output,
+so the pages can't drift from the code.</p>
 <table>
 <thead>
 <tr>

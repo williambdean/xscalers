@@ -61,6 +61,8 @@
       
     
     
+      <link rel="stylesheet" href="../../stylesheets/xarray.css">
+    
     <script>__md_scope=new URL("../..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
     
       
@@ -1096,32 +1098,787 @@ from a coordinate dataset-wide (the complement of keeping, which is
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">labels</span><span class="o">=</span><span class="p">{</span><span class="s2">"control"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"reference"</span><span class="p">]},</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">pruned</span> <span class="o">=</span> <span class="n">prune</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">mixed</span><span class="p">,</span> <span class="n">prune</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">mixed</span><span class="p">))</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="s2">"media_national"</span> <span class="ow">in</span> <span class="n">pruned</span><span class="o">.</span><span class="n">data_vars</span>            <span class="c1"># False — raw inputs are gone</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="s2">"reference"</span> <span class="ow">in</span> <span class="n">pruned</span><span class="o">.</span><span class="n">coords</span><span class="p">[</span><span class="s2">"control"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>  <span class="c1"># False — every variable shrank</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nb">print</span><span class="p">(</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="sa">f</span><span class="s2">"&lt;ul&gt;&lt;li&gt;media_national gone: </span><span class="si">{</span><span class="s1">'media_national'</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">pruned</span><span class="o">.</span><span class="n">data_vars</span><span class="si">}</span><span class="s2">&lt;/li&gt;"</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="sa">f</span><span class="s2">"&lt;li&gt;reference gone: </span><span class="si">{</span><span class="s1">'reference'</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">pruned</span><span class="o">.</span><span class="n">coords</span><span class="p">[</span><span class="s1">'control'</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="si">}</span><span class="s2">&lt;/li&gt;&lt;/ul&gt;"</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="n">pruned</span>
 </span></code></pre></div>
+<ul><li>media_national gone: True</li><li>reference gone: True</li></ul>
+<div><svg style="position: absolute; width: 0; height: 0; overflow: hidden">
+<defs>
+<symbol id="icon-database" viewBox="0 0 32 32">
+<path d="M16 0c-8.837 0-16 2.239-16 5v4c0 2.761 7.163 5 16 5s16-2.239 16-5v-4c0-2.761-7.163-5-16-5z"></path>
+<path d="M16 17c-8.837 0-16-2.239-16-5v6c0 2.761 7.163 5 16 5s16-2.239 16-5v-6c0 2.761-7.163 5-16 5z"></path>
+<path d="M16 26c-8.837 0-16-2.239-16-5v6c0 2.761 7.163 5 16 5s16-2.239 16-5v-6c0 2.761-7.163 5-16 5z"></path>
+</symbol>
+<symbol id="icon-file-text2" viewBox="0 0 32 32">
+<path d="M28.681 7.159c-0.694-0.947-1.662-2.053-2.724-3.116s-2.169-2.030-3.116-2.724c-1.612-1.182-2.393-1.319-2.841-1.319h-15.5c-1.378 0-2.5 1.121-2.5 2.5v27c0 1.378 1.122 2.5 2.5 2.5h23c1.378 0 2.5-1.122 2.5-2.5v-19.5c0-0.448-0.137-1.23-1.319-2.841zM24.543 5.457c0.959 0.959 1.712 1.825 2.268 2.543h-4.811v-4.811c0.718 0.556 1.584 1.309 2.543 2.268zM28 29.5c0 0.271-0.229 0.5-0.5 0.5h-23c-0.271 0-0.5-0.229-0.5-0.5v-27c0-0.271 0.229-0.5 0.5-0.5 0 0 15.499-0 15.5 0v7c0 0.552 0.448 1 1 1h7v19.5z"></path>
+<path d="M23 26h-14c-0.552 0-1-0.448-1-1s0.448-1 1-1h14c0.552 0 1 0.448 1 1s-0.448 1-1 1z"></path>
+<path d="M23 22h-14c-0.552 0-1-0.448-1-1s0.448-1 1-1h14c0.552 0 1 0.448 1 1s-0.448 1-1 1z"></path>
+<path d="M23 18h-14c-0.552 0-1-0.448-1-1s0.448-1 1-1h14c0.552 0 1 0.448 1 1s-0.448 1-1 1z"></path>
+</symbol>
+</defs>
+</svg>
+<style>/* CSS stylesheet for displaying xarray objects in notebooks */
+
+:root {
+  --xr-font-color0: var(
+    --jp-content-font-color0,
+    var(--pst-color-text-base rgba(0, 0, 0, 1))
+  );
+  --xr-font-color2: var(
+    --jp-content-font-color2,
+    var(--pst-color-text-base, rgba(0, 0, 0, 0.54))
+  );
+  --xr-font-color3: var(
+    --jp-content-font-color3,
+    var(--pst-color-text-base, rgba(0, 0, 0, 0.38))
+  );
+  --xr-border-color: var(
+    --jp-border-color2,
+    hsl(from var(--pst-color-on-background, white) h s calc(l - 10))
+  );
+  --xr-disabled-color: var(
+    --jp-layout-color3,
+    hsl(from var(--pst-color-on-background, white) h s calc(l - 40))
+  );
+  --xr-background-color: var(
+    --jp-layout-color0,
+    var(--pst-color-on-background, white)
+  );
+  --xr-background-color-row-even: var(
+    --jp-layout-color1,
+    hsl(from var(--pst-color-on-background, white) h s calc(l - 5))
+  );
+  --xr-background-color-row-odd: var(
+    --jp-layout-color2,
+    hsl(from var(--pst-color-on-background, white) h s calc(l - 15))
+  );
+}
+
+html[theme="dark"],
+html[data-theme="dark"],
+body[data-theme="dark"],
+body.vscode-dark {
+  --xr-font-color0: var(
+    --jp-content-font-color0,
+    var(--pst-color-text-base, rgba(255, 255, 255, 1))
+  );
+  --xr-font-color2: var(
+    --jp-content-font-color2,
+    var(--pst-color-text-base, rgba(255, 255, 255, 0.54))
+  );
+  --xr-font-color3: var(
+    --jp-content-font-color3,
+    var(--pst-color-text-base, rgba(255, 255, 255, 0.38))
+  );
+  --xr-border-color: var(
+    --jp-border-color2,
+    hsl(from var(--pst-color-on-background, #111111) h s calc(l + 10))
+  );
+  --xr-disabled-color: var(
+    --jp-layout-color3,
+    hsl(from var(--pst-color-on-background, #111111) h s calc(l + 40))
+  );
+  --xr-background-color: var(
+    --jp-layout-color0,
+    var(--pst-color-on-background, #111111)
+  );
+  --xr-background-color-row-even: var(
+    --jp-layout-color1,
+    hsl(from var(--pst-color-on-background, #111111) h s calc(l + 5))
+  );
+  --xr-background-color-row-odd: var(
+    --jp-layout-color2,
+    hsl(from var(--pst-color-on-background, #111111) h s calc(l + 15))
+  );
+}
+
+.xr-wrap {
+  display: block !important;
+  min-width: 300px;
+  max-width: 700px;
+  line-height: 1.6;
+  padding-bottom: 4px;
+}
+
+.xr-text-repr-fallback {
+  /* fallback to plain text repr when CSS is not injected (untrusted notebook) */
+  display: none;
+}
+
+.xr-header {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.xr-header {
+  border-bottom: solid 1px var(--xr-border-color);
+  margin-bottom: 4px;
+}
+
+.xr-header > div,
+.xr-header > ul {
+  display: inline;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.xr-obj-type,
+.xr-obj-name {
+  margin-left: 2px;
+  margin-right: 10px;
+}
+
+.xr-obj-type,
+.xr-group-box-contents > label {
+  color: var(--xr-font-color2);
+  display: block;
+}
+
+.xr-sections {
+  padding-left: 0 !important;
+  display: grid;
+  grid-template-columns: 150px auto auto 1fr 0 20px 0 20px;
+  margin-block-start: 0;
+  margin-block-end: 0;
+}
+
+.xr-section-item {
+  display: contents;
+}
+
+.xr-section-item > input,
+.xr-group-box-contents > input,
+.xr-array-wrap > input {
+  display: block;
+  opacity: 0;
+  height: 0;
+  margin: 0;
+}
+
+.xr-section-item > input + label,
+.xr-var-item > input + label {
+  color: var(--xr-disabled-color);
+}
+
+.xr-section-item > input:enabled + label,
+.xr-var-item > input:enabled + label,
+.xr-array-wrap > input:enabled + label,
+.xr-group-box-contents > input:enabled + label {
+  cursor: pointer;
+  color: var(--xr-font-color2);
+}
+
+.xr-section-item > input:focus-visible + label,
+.xr-var-item > input:focus-visible + label,
+.xr-array-wrap > input:focus-visible + label,
+.xr-group-box-contents > input:focus-visible + label {
+  outline: auto;
+}
+
+.xr-section-item > input:enabled + label:hover,
+.xr-var-item > input:enabled + label:hover,
+.xr-array-wrap > input:enabled + label:hover,
+.xr-group-box-contents > input:enabled + label:hover {
+  color: var(--xr-font-color0);
+}
+
+.xr-section-summary {
+  grid-column: 1;
+  color: var(--xr-font-color2);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.xr-section-summary > em {
+  font-weight: normal;
+}
+
+.xr-span-grid {
+  grid-column-end: -1;
+}
+
+.xr-section-summary > span {
+  display: inline-block;
+  padding-left: 0.3em;
+}
+
+.xr-group-box-contents > input:checked + label > span {
+  display: inline-block;
+  padding-left: 0.6em;
+}
+
+.xr-section-summary-in:disabled + label {
+  color: var(--xr-font-color2);
+}
+
+.xr-section-summary-in + label:before {
+  display: inline-block;
+  content: "►";
+  font-size: 11px;
+  width: 15px;
+  text-align: center;
+}
+
+.xr-section-summary-in:disabled + label:before {
+  color: var(--xr-disabled-color);
+}
+
+.xr-section-summary-in:checked + label:before {
+  content: "▼";
+}
+
+.xr-section-summary-in:checked + label > span {
+  display: none;
+}
+
+.xr-section-summary,
+.xr-section-inline-details,
+.xr-group-box-contents > label {
+  padding-top: 4px;
+}
+
+.xr-section-inline-details {
+  grid-column: 2 / -1;
+}
+
+.xr-section-details {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  margin-bottom: 5px;
+}
+
+.xr-section-summary-in ~ .xr-section-details {
+  display: none;
+}
+
+.xr-section-summary-in:checked ~ .xr-section-details {
+  display: contents;
+}
+
+.xr-children {
+  display: inline-grid;
+  grid-template-columns: 100%;
+  grid-column: 1 / -1;
+  padding-top: 4px;
+}
+
+.xr-group-box {
+  display: inline-grid;
+  grid-template-columns: 0px 30px auto;
+}
+
+.xr-group-box-vline {
+  grid-column-start: 1;
+  border-right: 0.2em solid;
+  border-color: var(--xr-border-color);
+  width: 0px;
+}
+
+.xr-group-box-hline {
+  grid-column-start: 2;
+  grid-row-start: 1;
+  height: 1em;
+  width: 26px;
+  border-bottom: 0.2em solid;
+  border-color: var(--xr-border-color);
+}
+
+.xr-group-box-contents {
+  grid-column-start: 3;
+  padding-bottom: 4px;
+}
+
+.xr-group-box-contents > label::before {
+  content: "📂";
+  padding-right: 0.3em;
+}
+
+.xr-group-box-contents > input:checked + label::before {
+  content: "📁";
+}
+
+.xr-group-box-contents > input:checked + label {
+  padding-bottom: 0px;
+}
+
+.xr-group-box-contents > input:checked ~ .xr-sections {
+  display: none;
+}
+
+.xr-group-box-contents > input + label > span {
+  display: none;
+}
+
+.xr-group-box-ellipsis {
+  font-size: 1.4em;
+  font-weight: 900;
+  color: var(--xr-font-color2);
+  letter-spacing: 0.15em;
+  cursor: default;
+}
+
+.xr-array-wrap {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 20px auto;
+}
+
+.xr-array-wrap > label {
+  grid-column: 1;
+  vertical-align: top;
+}
+
+.xr-preview {
+  color: var(--xr-font-color3);
+}
+
+.xr-array-preview,
+.xr-array-data {
+  padding: 0 5px !important;
+  grid-column: 2;
+}
+
+.xr-array-data,
+.xr-array-in:checked ~ .xr-array-preview {
+  display: none;
+}
+
+.xr-array-in:checked ~ .xr-array-data,
+.xr-array-preview {
+  display: inline-block;
+}
+
+.xr-dim-list {
+  display: inline-block !important;
+  list-style: none;
+  padding: 0 !important;
+  margin: 0;
+}
+
+.xr-dim-list li {
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+}
+
+.xr-dim-list:before {
+  content: "(";
+}
+
+.xr-dim-list:after {
+  content: ")";
+}
+
+.xr-dim-list li:not(:last-child):after {
+  content: ",";
+  padding-right: 5px;
+}
+
+.xr-has-index {
+  font-weight: bold;
+}
+
+.xr-var-list,
+.xr-var-item {
+  display: contents;
+}
+
+.xr-var-item > div,
+.xr-var-item label,
+.xr-var-item > .xr-var-name span {
+  background-color: var(--xr-background-color-row-even);
+  border-color: var(--xr-background-color-row-odd);
+  margin-bottom: 0;
+  padding-top: 2px;
+}
+
+.xr-var-item > .xr-var-name:hover span {
+  padding-right: 5px;
+}
+
+.xr-var-list > li:nth-child(odd) > div,
+.xr-var-list > li:nth-child(odd) > label,
+.xr-var-list > li:nth-child(odd) > .xr-var-name span {
+  background-color: var(--xr-background-color-row-odd);
+  border-color: var(--xr-background-color-row-even);
+}
+
+.xr-var-name {
+  grid-column: 1;
+}
+
+.xr-var-dims {
+  grid-column: 2;
+}
+
+.xr-var-dtype {
+  grid-column: 3;
+  text-align: right;
+  color: var(--xr-font-color2);
+}
+
+.xr-var-preview {
+  grid-column: 4;
+}
+
+.xr-index-preview {
+  grid-column: 2 / 5;
+  color: var(--xr-font-color2);
+}
+
+.xr-var-name,
+.xr-var-dims,
+.xr-var-dtype,
+.xr-preview,
+.xr-attrs dt {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 10px;
+}
+
+.xr-var-name:hover,
+.xr-var-dims:hover,
+.xr-var-dtype:hover,
+.xr-attrs dt:hover {
+  overflow: visible;
+  width: auto;
+  z-index: 1;
+}
+
+.xr-var-attrs,
+.xr-var-data,
+.xr-index-data {
+  display: none;
+  border-top: 2px dotted var(--xr-background-color);
+  padding-bottom: 20px !important;
+  padding-top: 10px !important;
+}
+
+.xr-var-attrs-in + label,
+.xr-var-data-in + label,
+.xr-index-data-in + label {
+  padding: 0 1px;
+}
+
+.xr-var-attrs-in:checked ~ .xr-var-attrs,
+.xr-var-data-in:checked ~ .xr-var-data,
+.xr-index-data-in:checked ~ .xr-index-data {
+  display: block;
+}
+
+.xr-var-data > table {
+  float: right;
+}
+
+.xr-var-data > pre,
+.xr-index-data > pre,
+.xr-var-data > table > tbody > tr {
+  background-color: transparent !important;
+}
+
+.xr-var-name span,
+.xr-var-data,
+.xr-index-name div,
+.xr-index-data,
+.xr-attrs {
+  padding-left: 25px !important;
+}
+
+.xr-attrs,
+.xr-var-attrs,
+.xr-var-data,
+.xr-index-data {
+  grid-column: 1 / -1;
+}
+
+dl.xr-attrs {
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 125px auto;
+}
+
+.xr-attrs dt,
+.xr-attrs dd {
+  padding: 0;
+  margin: 0;
+  float: left;
+  padding-right: 10px;
+  width: auto;
+}
+
+.xr-attrs dt {
+  font-weight: normal;
+  grid-column: 1;
+}
+
+.xr-attrs dt:hover span {
+  display: inline-block;
+  background: var(--xr-background-color);
+  padding-right: 10px;
+}
+
+.xr-attrs dd {
+  grid-column: 2;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.xr-icon-database,
+.xr-icon-file-text2,
+.xr-no-icon {
+  display: inline-block;
+  vertical-align: middle;
+  width: 1em;
+  height: 1.5em !important;
+  stroke-width: 0;
+  stroke: currentColor;
+  fill: currentColor;
+}
+
+.xr-var-attrs-in:checked + label > .xr-icon-file-text2,
+.xr-var-data-in:checked + label > .xr-icon-database,
+.xr-index-data-in:checked + label > .xr-icon-database {
+  color: var(--xr-font-color0);
+  filter: drop-shadow(1px 1px 5px var(--xr-font-color2));
+  stroke-width: 0.8px;
+}
+</style><pre class='xr-text-repr-fallback'>&lt;xarray.Dataset&gt; Size: 13kB
+Dimensions:        (date: 104, geo: 2, media: 2, product: 4, control: 2)
+Coordinates:
+  * date           (date) datetime64[us] 832B 2024-01-01 ... 2024-04-13
+  * geo            (geo) &lt;U2 16B &#x27;us&#x27; &#x27;eu&#x27;
+  * media          (media) &lt;U3 24B &#x27;tv&#x27; &#x27;ooh&#x27;
+  * product        (product) &lt;U2 32B &#x27;p1&#x27; &#x27;p2&#x27; &#x27;p3&#x27; &#x27;p4&#x27;
+  * control        (control) &lt;U11 88B &#x27;level&#x27; &#x27;seasonality&#x27;
+Data variables:
+    media_digital  (date, geo, media) float64 3kB 8.648 11.89 ... 4.319 4.792
+    media_tv       (date, media) float64 2kB 1.397e+03 4.557e+03 ... 683.7
+    controls_nat   (date) float64 832B 0.4081 -0.3832 -1.046 ... 0.6264 1.096
+    controls       (date, product, control) float64 7kB 7.496 8.529 ... 4.882</pre><div class='xr-wrap' style='display:none'><div class='xr-header'><div class='xr-obj-type'>xarray.Dataset</div></div><ul class='xr-sections'><li class='xr-section-item'><input id='section-4930a142-24f1-41ac-8ac0-50cdfaf468fd' class='xr-section-summary-in' type='checkbox' disabled /><label for='section-4930a142-24f1-41ac-8ac0-50cdfaf468fd' class='xr-section-summary'>Dimensions:</label><div class='xr-section-inline-details'><ul class='xr-dim-list'><li><span class='xr-has-index'>date</span>: 104</li><li><span class='xr-has-index'>geo</span>: 2</li><li><span class='xr-has-index'>media</span>: 2</li><li><span class='xr-has-index'>product</span>: 4</li><li><span class='xr-has-index'>control</span>: 2</li></ul></div></li><li class='xr-section-item'><input id='section-5a72439c-a374-4aa2-be3f-57eaa6d48259' class='xr-section-summary-in' type='checkbox' checked /><label for='section-5a72439c-a374-4aa2-be3f-57eaa6d48259' class='xr-section-summary' title='Expand/collapse section'>Coordinates: <span>(5)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>date</span></div><div class='xr-var-dims'>(date)</div><div class='xr-var-dtype'>datetime64[us]</div><div class='xr-var-preview xr-preview'>2024-01-01 ... 2024-04-13</div><input id='attrs-f89da4f7-0808-4ac4-a00f-4bbaffe72d5c' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-f89da4f7-0808-4ac4-a00f-4bbaffe72d5c' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-291e1826-0fc2-4ac9-853d-78e21bbd7825' class='xr-var-data-in' type='checkbox'><label for='data-291e1826-0fc2-4ac9-853d-78e21bbd7825' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;2024-01-01T00:00:00.000000&#x27;, &#x27;2024-01-02T00:00:00.000000&#x27;,
+       &#x27;2024-01-03T00:00:00.000000&#x27;, &#x27;2024-01-04T00:00:00.000000&#x27;,
+       &#x27;2024-01-05T00:00:00.000000&#x27;, &#x27;2024-01-06T00:00:00.000000&#x27;,
+       &#x27;2024-01-07T00:00:00.000000&#x27;, &#x27;2024-01-08T00:00:00.000000&#x27;,
+       &#x27;2024-01-09T00:00:00.000000&#x27;, &#x27;2024-01-10T00:00:00.000000&#x27;,
+       &#x27;2024-01-11T00:00:00.000000&#x27;, &#x27;2024-01-12T00:00:00.000000&#x27;,
+       &#x27;2024-01-13T00:00:00.000000&#x27;, &#x27;2024-01-14T00:00:00.000000&#x27;,
+       &#x27;2024-01-15T00:00:00.000000&#x27;, &#x27;2024-01-16T00:00:00.000000&#x27;,
+       &#x27;2024-01-17T00:00:00.000000&#x27;, &#x27;2024-01-18T00:00:00.000000&#x27;,
+       &#x27;2024-01-19T00:00:00.000000&#x27;, &#x27;2024-01-20T00:00:00.000000&#x27;,
+       &#x27;2024-01-21T00:00:00.000000&#x27;, &#x27;2024-01-22T00:00:00.000000&#x27;,
+       &#x27;2024-01-23T00:00:00.000000&#x27;, &#x27;2024-01-24T00:00:00.000000&#x27;,
+       &#x27;2024-01-25T00:00:00.000000&#x27;, &#x27;2024-01-26T00:00:00.000000&#x27;,
+       &#x27;2024-01-27T00:00:00.000000&#x27;, &#x27;2024-01-28T00:00:00.000000&#x27;,
+       &#x27;2024-01-29T00:00:00.000000&#x27;, &#x27;2024-01-30T00:00:00.000000&#x27;,
+       &#x27;2024-01-31T00:00:00.000000&#x27;, &#x27;2024-02-01T00:00:00.000000&#x27;,
+       &#x27;2024-02-02T00:00:00.000000&#x27;, &#x27;2024-02-03T00:00:00.000000&#x27;,
+       &#x27;2024-02-04T00:00:00.000000&#x27;, &#x27;2024-02-05T00:00:00.000000&#x27;,
+       &#x27;2024-02-06T00:00:00.000000&#x27;, &#x27;2024-02-07T00:00:00.000000&#x27;,
+       &#x27;2024-02-08T00:00:00.000000&#x27;, &#x27;2024-02-09T00:00:00.000000&#x27;,
+       &#x27;2024-02-10T00:00:00.000000&#x27;, &#x27;2024-02-11T00:00:00.000000&#x27;,
+       &#x27;2024-02-12T00:00:00.000000&#x27;, &#x27;2024-02-13T00:00:00.000000&#x27;,
+       &#x27;2024-02-14T00:00:00.000000&#x27;, &#x27;2024-02-15T00:00:00.000000&#x27;,
+       &#x27;2024-02-16T00:00:00.000000&#x27;, &#x27;2024-02-17T00:00:00.000000&#x27;,
+       &#x27;2024-02-18T00:00:00.000000&#x27;, &#x27;2024-02-19T00:00:00.000000&#x27;,
+       &#x27;2024-02-20T00:00:00.000000&#x27;, &#x27;2024-02-21T00:00:00.000000&#x27;,
+       &#x27;2024-02-22T00:00:00.000000&#x27;, &#x27;2024-02-23T00:00:00.000000&#x27;,
+       &#x27;2024-02-24T00:00:00.000000&#x27;, &#x27;2024-02-25T00:00:00.000000&#x27;,
+       &#x27;2024-02-26T00:00:00.000000&#x27;, &#x27;2024-02-27T00:00:00.000000&#x27;,
+       &#x27;2024-02-28T00:00:00.000000&#x27;, &#x27;2024-02-29T00:00:00.000000&#x27;,
+       &#x27;2024-03-01T00:00:00.000000&#x27;, &#x27;2024-03-02T00:00:00.000000&#x27;,
+       &#x27;2024-03-03T00:00:00.000000&#x27;, &#x27;2024-03-04T00:00:00.000000&#x27;,
+       &#x27;2024-03-05T00:00:00.000000&#x27;, &#x27;2024-03-06T00:00:00.000000&#x27;,
+       &#x27;2024-03-07T00:00:00.000000&#x27;, &#x27;2024-03-08T00:00:00.000000&#x27;,
+       &#x27;2024-03-09T00:00:00.000000&#x27;, &#x27;2024-03-10T00:00:00.000000&#x27;,
+       &#x27;2024-03-11T00:00:00.000000&#x27;, &#x27;2024-03-12T00:00:00.000000&#x27;,
+       &#x27;2024-03-13T00:00:00.000000&#x27;, &#x27;2024-03-14T00:00:00.000000&#x27;,
+       &#x27;2024-03-15T00:00:00.000000&#x27;, &#x27;2024-03-16T00:00:00.000000&#x27;,
+       &#x27;2024-03-17T00:00:00.000000&#x27;, &#x27;2024-03-18T00:00:00.000000&#x27;,
+       &#x27;2024-03-19T00:00:00.000000&#x27;, &#x27;2024-03-20T00:00:00.000000&#x27;,
+       &#x27;2024-03-21T00:00:00.000000&#x27;, &#x27;2024-03-22T00:00:00.000000&#x27;,
+       &#x27;2024-03-23T00:00:00.000000&#x27;, &#x27;2024-03-24T00:00:00.000000&#x27;,
+       &#x27;2024-03-25T00:00:00.000000&#x27;, &#x27;2024-03-26T00:00:00.000000&#x27;,
+       &#x27;2024-03-27T00:00:00.000000&#x27;, &#x27;2024-03-28T00:00:00.000000&#x27;,
+       &#x27;2024-03-29T00:00:00.000000&#x27;, &#x27;2024-03-30T00:00:00.000000&#x27;,
+       &#x27;2024-03-31T00:00:00.000000&#x27;, &#x27;2024-04-01T00:00:00.000000&#x27;,
+       &#x27;2024-04-02T00:00:00.000000&#x27;, &#x27;2024-04-03T00:00:00.000000&#x27;,
+       &#x27;2024-04-04T00:00:00.000000&#x27;, &#x27;2024-04-05T00:00:00.000000&#x27;,
+       &#x27;2024-04-06T00:00:00.000000&#x27;, &#x27;2024-04-07T00:00:00.000000&#x27;,
+       &#x27;2024-04-08T00:00:00.000000&#x27;, &#x27;2024-04-09T00:00:00.000000&#x27;,
+       &#x27;2024-04-10T00:00:00.000000&#x27;, &#x27;2024-04-11T00:00:00.000000&#x27;,
+       &#x27;2024-04-12T00:00:00.000000&#x27;, &#x27;2024-04-13T00:00:00.000000&#x27;],
+      dtype=&#x27;datetime64[us]&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>geo</span></div><div class='xr-var-dims'>(geo)</div><div class='xr-var-dtype'>&lt;U2</div><div class='xr-var-preview xr-preview'>&#x27;us&#x27; &#x27;eu&#x27;</div><input id='attrs-178a8eb0-d8a1-4347-9dec-c956d8ab07db' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-178a8eb0-d8a1-4347-9dec-c956d8ab07db' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-5d833623-3107-4f85-88ea-c47333a9037f' class='xr-var-data-in' type='checkbox'><label for='data-5d833623-3107-4f85-88ea-c47333a9037f' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;us&#x27;, &#x27;eu&#x27;], dtype=&#x27;&lt;U2&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>media</span></div><div class='xr-var-dims'>(media)</div><div class='xr-var-dtype'>&lt;U3</div><div class='xr-var-preview xr-preview'>&#x27;tv&#x27; &#x27;ooh&#x27;</div><input id='attrs-1050e07f-8cc2-4226-9845-00e7ab604696' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-1050e07f-8cc2-4226-9845-00e7ab604696' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-747e02d6-a987-46a6-996f-3e69f3508de0' class='xr-var-data-in' type='checkbox'><label for='data-747e02d6-a987-46a6-996f-3e69f3508de0' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;tv&#x27;, &#x27;ooh&#x27;], dtype=&#x27;&lt;U3&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>product</span></div><div class='xr-var-dims'>(product)</div><div class='xr-var-dtype'>&lt;U2</div><div class='xr-var-preview xr-preview'>&#x27;p1&#x27; &#x27;p2&#x27; &#x27;p3&#x27; &#x27;p4&#x27;</div><input id='attrs-8e6fe2f2-2037-4c2d-a990-4446c5e21e10' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-8e6fe2f2-2037-4c2d-a990-4446c5e21e10' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-114ce47f-0508-4312-b93a-93e88351625a' class='xr-var-data-in' type='checkbox'><label for='data-114ce47f-0508-4312-b93a-93e88351625a' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;p1&#x27;, &#x27;p2&#x27;, &#x27;p3&#x27;, &#x27;p4&#x27;], dtype=&#x27;&lt;U2&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>control</span></div><div class='xr-var-dims'>(control)</div><div class='xr-var-dtype'>&lt;U11</div><div class='xr-var-preview xr-preview'>&#x27;level&#x27; &#x27;seasonality&#x27;</div><input id='attrs-a8e22233-af51-4000-8ea1-b0e6021cc81f' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-a8e22233-af51-4000-8ea1-b0e6021cc81f' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-e54cd5fb-87ed-4eba-8305-d7f1d46c1e70' class='xr-var-data-in' type='checkbox'><label for='data-e54cd5fb-87ed-4eba-8305-d7f1d46c1e70' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([&#x27;level&#x27;, &#x27;seasonality&#x27;], dtype=&#x27;&lt;U11&#x27;)</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-2eb3c55b-01be-40e7-9261-ee68ccae35fd' class='xr-section-summary-in' type='checkbox' checked /><label for='section-2eb3c55b-01be-40e7-9261-ee68ccae35fd' class='xr-section-summary' title='Expand/collapse section'>Data variables: <span>(4)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><ul class='xr-var-list'><li class='xr-var-item'><div class='xr-var-name'><span>media_digital</span></div><div class='xr-var-dims'>(date, geo, media)</div><div class='xr-var-dtype'>float64</div><div class='xr-var-preview xr-preview'>8.648 11.89 19.83 ... 4.319 4.792</div><input id='attrs-fc3f4bae-b46b-4c95-b4c7-954d94459acd' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-fc3f4bae-b46b-4c95-b4c7-954d94459acd' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-be93dc80-af96-4a54-a21f-3d5596559eb6' class='xr-var-data-in' type='checkbox'><label for='data-be93dc80-af96-4a54-a21f-3d5596559eb6' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([[[ 8.64834909, 11.89238387],
+        [19.83074845,  4.88122644]],
+
+       [[18.8422151 , 12.68522359],
+        [18.61570381, 20.88276167]],
+
+       [[ 3.37217224,  3.21742359],
+        [ 2.49029298, 15.23906007]],
+
+       [[17.57240078, 15.95844052],
+        [ 1.09813996,  4.35897317]],
+
+       [[23.60449553,  1.70823622],
+        [11.72543403, 22.30613944]],
+
+       [[15.91370142, 12.03331167],
+        [ 5.75237805,  1.32525115]],
+
+       [[ 5.83098401, 18.3612705 ],
+        [20.60281658, 14.98595481]],
+...
+       [[12.17731609,  2.12859625],
+        [ 4.06937277, 36.15850378]],
+
+       [[19.63967527, 21.12771358],
+        [ 7.08428501, 18.12795283]],
+
+       [[10.64513453, 15.43648092],
+        [ 3.76165519,  3.16119541]],
+
+       [[25.55663672,  7.88096968],
+        [ 4.07765229,  9.06030953]],
+
+       [[ 7.86395509, 22.13489622],
+        [ 5.26593448,  5.72433886]],
+
+       [[ 4.83704656, 16.04040983],
+        [10.93542708, 19.51262322]],
+
+       [[12.05397442,  3.64396042],
+        [ 4.3188477 ,  4.7921871 ]]])</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span>media_tv</span></div><div class='xr-var-dims'>(date, media)</div><div class='xr-var-dtype'>float64</div><div class='xr-var-preview xr-preview'>1.397e+03 4.557e+03 ... 683.7</div><input id='attrs-010653a9-1580-4191-aa45-f7720efb5390' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-010653a9-1580-4191-aa45-f7720efb5390' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-da70907c-6311-4f10-a768-40e33e94cb70' class='xr-var-data-in' type='checkbox'><label for='data-da70907c-6311-4f10-a768-40e33e94cb70' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([[1397.41770256, 4557.49064085],
+       [2893.01432307,  726.21043669],
+       [3628.0952807 , 2128.57841093],
+       [2370.20517144, 3313.54101914],
+       [1113.09041037, 3293.0897634 ],
+       [ 690.98846412, 1778.28970922],
+       [2917.64664791,  197.77974956],
+       [1265.96280814, 6273.80061549],
+       [1752.03295567, 1875.35531372],
+       [1193.69811224, 1191.35972099],
+       [1262.21887767, 3435.40516481],
+       [2622.32567967, 1920.42496906],
+       [1795.95280046, 1575.60911921],
+       [ 337.62676621, 2053.97477013],
+       [2272.1513593 ,  646.80091498],
+       [2471.32945405, 5624.33412922],
+       [ 871.11010526, 6220.15715462],
+       [1587.02469383, 1376.75041476],
+       [ 954.95608275, 2067.41082152],
+       [2821.58129887,  989.69435068],
+...
+       [ 353.19999879,  434.44421912],
+       [1304.21224277, 2278.63391517],
+       [3147.12434143, 1436.16939439],
+       [1732.31686189,  478.41523635],
+       [2391.27396941, 2665.05450349],
+       [2257.6253439 ,  603.42663817],
+       [ 943.41975158,  727.0593096 ],
+       [1161.83202299,  572.08410437],
+       [2371.38362757, 3185.77601233],
+       [ 620.49054891, 1339.5052364 ],
+       [ 635.68461912, 3474.589746  ],
+       [1624.69057544,  352.14829062],
+       [ 704.62409046,  563.92257042],
+       [1155.99335129, 2706.00681163],
+       [2486.78228078, 3574.28334773],
+       [1362.24481597, 1638.08451659],
+       [1568.05190142, 2294.57483202],
+       [1848.68539384, 3231.25514648],
+       [ 913.32261424, 2618.86325604],
+       [1225.70458698,  683.65382598]])</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span>controls_nat</span></div><div class='xr-var-dims'>(date)</div><div class='xr-var-dtype'>float64</div><div class='xr-var-preview xr-preview'>0.4081 -0.3832 ... 0.6264 1.096</div><input id='attrs-e92f597c-84d3-47e2-9ac7-c659a335870b' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-e92f597c-84d3-47e2-9ac7-c659a335870b' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-5817f82b-2da0-41da-b2f7-b7dd405dd6e0' class='xr-var-data-in' type='checkbox'><label for='data-5817f82b-2da0-41da-b2f7-b7dd405dd6e0' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([ 0.40805092, -0.38319616, -1.04614962, -0.74811028,  0.85606522,
+       -1.43315488, -0.27392515, -0.83726047,  0.02111805, -0.75795365,
+       -0.48814099, -1.363159  ,  0.15051446, -0.86393857,  0.01362355,
+       -1.7913416 , -1.27900456, -0.41300187, -0.79447351, -0.25389647,
+       -0.66293387,  0.67427642,  0.46664139,  1.04397823,  0.617902  ,
+        1.12841627,  1.11884916,  0.31379502, -0.46094525, -0.07417035,
+        0.1350264 , -0.76113863, -0.42137281,  1.01406865,  0.71745622,
+       -0.76766757, -0.98188052, -0.55213617, -1.65059098,  0.99401544,
+        0.40671111, -1.18267218, -0.28347319, -0.70482252,  1.25888474,
+       -1.27194265, -0.70162362,  1.59368764,  1.65167964,  1.58198308,
+        0.33990253, -0.45507946, -0.84177655,  0.76988482, -0.78954636,
+       -0.11766523, -0.15935048,  0.99949832, -0.68677369,  0.98628965,
+       -0.57189979, -0.49784319, -1.1066347 ,  0.24022512, -0.16395356,
+        0.09595482, -0.32280308,  0.09821974,  1.64909609,  0.46774172,
+        1.01114985, -0.03908281, -0.0197534 ,  1.18054632,  2.70699786,
+       -0.56147653,  0.49506323, -0.45810108,  0.53977716,  0.21497448,
+       -0.53595315, -1.51467083, -1.59479847,  1.3328666 ,  0.08029218,
+        0.03450122,  0.60440618, -0.04382203,  2.13271517,  0.1625083 ,
+        1.04064919,  0.22493455, -1.42697488,  0.58143727,  0.30717013,
+       -0.42895677,  1.40035624,  0.68684087,  0.84297362, -1.18562463,
+       -0.43678915, -1.64800898,  0.62639102,  1.0961966 ])</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span>controls</span></div><div class='xr-var-dims'>(date, product, control)</div><div class='xr-var-dtype'>float64</div><div class='xr-var-preview xr-preview'>7.496 8.529 5.547 ... 7.454 4.882</div><input id='attrs-5a5fb4b3-9ef1-49f4-b72c-005ea611e838' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-5a5fb4b3-9ef1-49f4-b72c-005ea611e838' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-3177e951-d67c-45ce-a98c-5a69a59b10e3' class='xr-var-data-in' type='checkbox'><label for='data-3177e951-d67c-45ce-a98c-5a69a59b10e3' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([[[ 7.4955762 ,  8.52881288],
+        [ 5.54737525,  2.57031868],
+        [10.764296  ,  3.11886243],
+        [14.25222839,  5.47586554]],
+
+       [[15.09815734,  4.71140784],
+        [11.18199969,  8.73545109],
+        [14.11653978,  3.57159221],
+        [ 3.1044841 ,  2.38935193]],
+
+       [[ 2.46299954, 11.1646258 ],
+        [ 6.48375828,  0.84244811],
+        [ 2.09532507,  4.09016865],
+        [ 3.08247877,  1.65448991]],
+
+       [[16.49067352,  2.7443766 ],
+        [ 0.07956063,  2.97795843],
+        [12.02479568,  6.38294711],
+        [ 1.03683217,  1.1064237 ]],
+
+...
+
+       [[ 5.07059613,  5.5692044 ],
+        [ 7.81008127, 12.87000893],
+        [ 2.84870285,  9.05382212],
+        [ 7.90862484,  4.39488282]],
+
+       [[ 6.16989841,  0.84963455],
+        [ 7.06995177,  7.69563169],
+        [ 4.03418513,  2.01167479],
+        [ 9.54051985,  8.49278921]],
+
+       [[10.71501694,  1.31782501],
+        [ 1.60072582, 13.29912113],
+        [ 4.36776246,  6.63297866],
+        [ 4.31242528, 19.25237819]],
+
+       [[ 4.22426629, 16.90722786],
+        [ 7.83042974,  4.60450798],
+        [ 1.04436031, 11.54652204],
+        [ 7.4541872 ,  4.88193989]]])</pre></div></li></ul></div></li></ul></div></div>
+
 <p>The motivating shape is pruning raw inputs once a derived metric supersedes
 them, so later steps never have to enumerate what they don't care about:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">xscalers.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">Pipeline</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">xscalers.preprocessing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Derive</span><span class="p">,</span> <span class="n">VariableDropper</span><span class="p">,</span> <span class="n">ZScore</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">pipe</span> <span class="o">=</span> <span class="n">Pipeline</span><span class="p">(</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="p">[</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="p">(</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>            <span class="s2">"derive"</span><span class="p">,</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>            <span class="n">Derive</span><span class="p">(</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>                <span class="n">name</span><span class="o">=</span><span class="s2">"tv_per_control"</span><span class="p">,</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>                <span class="n">left</span><span class="o">=</span><span class="p">(</span><span class="s2">"media_national"</span><span class="p">,</span> <span class="p">{</span><span class="s2">"media"</span><span class="p">:</span> <span class="s2">"tv"</span><span class="p">}),</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>                <span class="n">right</span><span class="o">=</span><span class="p">(</span><span class="s2">"controls_prod"</span><span class="p">,</span> <span class="p">{}),</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>                <span class="n">op</span><span class="o">=</span><span class="s2">"ratio"</span><span class="p">,</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>            <span class="p">),</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>        <span class="p">),</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="p">(</span><span class="s2">"prune"</span><span class="p">,</span> <span class="n">VariableDropper</span><span class="p">(</span><span class="nb">vars</span><span class="o">=</span><span class="p">[</span><span class="s2">"media_national"</span><span class="p">,</span> <span class="s2">"controls_prod"</span><span class="p">])),</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="p">(</span><span class="s2">"scale"</span><span class="p">,</span> <span class="n">VariableTransformer</span><span class="p">({</span><span class="s2">"tv_per_control"</span><span class="p">:</span> <span class="n">ZScore</span><span class="p">(</span><span class="n">dims</span><span class="o">=</span><span class="p">(</span><span class="s2">"date"</span><span class="p">,))})),</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="p">]</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="p">)</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="n">model_ready</span> <span class="o">=</span> <span class="n">pipe</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">mixed</span><span class="p">)</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nb">sorted</span><span class="p">(</span><span class="n">model_ready</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)</span>                   <span class="c1"># raw inputs pruned, ratio kept</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">xscalers.compose</span><span class="w"> </span><span class="kn">import</span> <span class="n">VariableTransformer</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">xscalers.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">Pipeline</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">xscalers.preprocessing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Derive</span><span class="p">,</span> <span class="n">VariableDropper</span><span class="p">,</span> <span class="n">ZScore</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">pipe</span> <span class="o">=</span> <span class="n">Pipeline</span><span class="p">(</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="p">[</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="p">(</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>            <span class="s2">"derive"</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>            <span class="n">Derive</span><span class="p">(</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>                <span class="n">name</span><span class="o">=</span><span class="s2">"tv_per_control"</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                <span class="n">left</span><span class="o">=</span><span class="p">(</span><span class="s2">"media_national"</span><span class="p">,</span> <span class="p">{</span><span class="s2">"media"</span><span class="p">:</span> <span class="s2">"tv"</span><span class="p">}),</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>                <span class="n">right</span><span class="o">=</span><span class="p">(</span><span class="s2">"controls_prod"</span><span class="p">,</span> <span class="p">{}),</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>                <span class="n">op</span><span class="o">=</span><span class="s2">"ratio"</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>            <span class="p">),</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        <span class="p">),</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="p">(</span><span class="s2">"prune"</span><span class="p">,</span> <span class="n">VariableDropper</span><span class="p">(</span><span class="nb">vars</span><span class="o">=</span><span class="p">[</span><span class="s2">"media_national"</span><span class="p">,</span> <span class="s2">"controls_prod"</span><span class="p">])),</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="p">(</span><span class="s2">"scale"</span><span class="p">,</span> <span class="n">VariableTransformer</span><span class="p">({</span><span class="s2">"tv_per_control"</span><span class="p">:</span> <span class="n">ZScore</span><span class="p">(</span><span class="n">dims</span><span class="o">=</span><span class="p">(</span><span class="s2">"date"</span><span class="p">,))})),</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="p">]</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="p">)</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="n">model_ready</span> <span class="o">=</span> <span class="n">pipe</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">mixed</span><span class="p">)</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"model_ready vars: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">model_ready</span><span class="o">.</span><span class="n">data_vars</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </span></code></pre></div>
+model_ready vars: ['controls', 'controls_nat', 'media_digital', 'media_tv', 'tv_per_control']
+
 <h2 id="honesty-about-dropped-data">Honesty about dropped data</h2>
 <p>Dropping destroys data, so <code>VariableDropper.inverse_transform</code> raises
 instead of guessing, and <code>pipe.inverse_transform</code> refuses for the whole
