@@ -270,14 +270,13 @@ concatenated with the out-of-sample block, then slice: a trailing window
 over the new block alone burns in from raw values.
 
 The same contract covers the other causal smoothers: `EwmSmooth` runs
-`s_t = a*x_t + (1-a)*s_{t-1}` seeded at the first value (`alpha` in state,
-`roll` nothing), and `Loess` is a one-sided local regression over a
-trailing window with tricube weights, evaluated at the window's end
-(`degree=1` for the loess-like linear fit, `degree=0` for the
-kernel-weighted trailing mean). Neither needs anything beyond numpy and
-xarray, and both keep the vocabulary above: state-only out-of-sample,
-spec-serializable, lead-in shrinking instead of NaN, honestly
-non-invertible, xarray-only (no symbolic path).
+`s_t = a*x_t + (1-a)*s_{t-1}` seeded at the first value, and `Loess` is a
+local regression with tricube weights: with `center=False` (default) the
+fit trails the window and evaluates at its end (causal, the smoothest
+look is `degree=0` on a longer window), while `center=True` evaluates a
+symmetric window at its middle, the textbook two-sided loess: far
+smoother, but the right edge of a block has no future data, so the last
+points degrade to one-sided fits (still no NaN).
 
 ```python
 import xarray as xr

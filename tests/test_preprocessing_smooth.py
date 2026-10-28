@@ -275,7 +275,7 @@ class TestLoessTransform:
         spec = to_spec(original)
         assert spec == {
             "kind": "Loess",
-            "kwargs": {"window": 6, "degree": 1, "dims": ["date"]},
+            "kwargs": {"window": 6, "degree": 1, "dims": ["date"], "center": False},
         }
         rebuilt = from_spec(json.loads(json.dumps(spec)))
         before = original.fit(national_ds["target"])
@@ -296,3 +296,57 @@ class TestLoessTransform:
         import xscalers
 
         assert xscalers.Loess(window=6, degree=0).degree == 0
+
+
+class TestLoessCentered:
+    def test_centered_interior_uses_both_sides(self):
+        # window=3 centered at t: neighbors get tricube(1/2) = 0.66992...
+        x = xr.DataArray([1.0, 0.0, 2.0], dims="date")
+        smoother = Loess(window=3, degree=0, center=True)
+        out = smoother.transform(x, smoother.fit(x))
+        w = (1 - 0.5**3) ** 3  # neighbor weight; the point itself has weight 1
+        expected = [
+            (1.0 + w * 0.0) / (1 + w),  # lead-in: keep x0, not 1.0
+            (w * 1.0 + 0.0 + w * 2.0) / (2 * w + 1),
+            (w * 0.0 + 2.0) / (1 + w),  # right edge: one-sided
+        ]
+        assert np.allclose(out.values, expected)
+        assert out.isel(date=1).item() == pytest.approx(expected[1])
+
+    def test_centered_degree1_also_reproduces_linear_series(self):
+        x = xr.DataArray(np.linspace(3.0, 7.0, 30), dims="date")
+        for center in (False, True):
+            smoother = Loess(window=7, degree=1, center=center)
+            out = smoother.transform(x, smoother.fit(x))
+            assert np.allclose(out.values, x.values)
+
+    def test_centered_is_less_jagged_than_causal(self):
+        rng = np.random.default_rng(3)
+        x = xr.DataArray(np.sin(np.arange(60) / 2) + rng.normal(0, 0.4, 60), dims="date")
+        jagg = Loess(window=11, degree=1).transform(x, Loess(window=11, degree=1).fit(x))
+        smooth = Loess(window=11, degree=1, center=True).transform(
+            x, Loess(window=11, degree=1, center=True).fit(x)
+        )
+        assert np.std(np.diff(smooth.values)) < np.std(np.diff(jagg.values))
+
+    def test_centered_oos_block_from_state_alone(self, national_ds):
+        target = national_ds["target"]
+        smoother = Loess(window=5, degree=1, center=True, dims=("date",))
+        state = smoother.fit(target)
+        tail = target.isel(date=slice(-12, None))
+        out = smoother.transform(tail, state)
+        assert not out.isnull().any()
+
+    def test_center_round_trips_through_spec_and_state(self, national_ds, tmp_path):
+        original = Loess(window=6, degree=1, center=True, dims=("date",))
+        spec = to_spec(original)
+        assert spec["kwargs"]["center"] is True
+        rebuilt = from_spec(json.loads(json.dumps(spec)))
+        target = national_ds["target"]
+        path = tmp_path / "state.nc"
+        state = rebuilt.fit(target)
+        state.to_netcdf(path)
+        out = rebuilt.transform(target, xr.open_dataset(path))
+        expected = original.transform(target, original.fit(target))
+        assert np.allclose(out.values, expected.values)
+        assert state.attrs["center"] is True or state.attrs["center"] == 1

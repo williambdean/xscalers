@@ -342,14 +342,17 @@ class EwmSmooth(BaseTransformer):
 
 @register
 class Loess(BaseTransformer):
-    """Causal (one-sided) local regression over a trailing window.
+    """Local regression over a trailing or centered window.
 
-    Each position's value is a weighted least-squares fit of the trailing
-    ``window`` points (tricube weights decaying with lag distance), evaluated
-    at the current point, so it is causal and out-of-sample safe exactly like
+    Default ``center=False``: each position's value is a weighted
+    least-squares fit of the trailing ``window`` points evaluated at the
+    current point, causal and out-of-sample safe exactly like
     ``RollingMean``: lead-in windows shrink and are renormalized, no NaN.
+    ``center=True`` fits over a symmetric window evaluated at its middle,
+    the textbook (two-sided) loess look: far smoother, but near a block's
+    right edge the window degenerates to one-sided (no future data).
     ``degree=1`` is the loess-like local linear fit, ``degree=0`` is the
-    kernel-weighted trailing mean.
+    kernel-weighted mean.
 
     One named dim to regress along; ambiguous ``dims=None`` on multi-dim
     data raises. Missing values inside a window are excluded (weights
@@ -365,8 +368,9 @@ class Loess(BaseTransformer):
         window: int = 4,
         degree: int = 1,
         dims: tuple[str, ...] | str | None = None,
+        center: bool = False,
     ):
-        """Take the trailing window length, the fit degree (0 | 1), and the dim."""
+        """Take the window length, fit degree (0 | 1), the dim, and centering."""
         if window < 1:
             raise ValueError(f"window must be >= 1; got {window}")
         if degree not in (0, 1):
@@ -374,10 +378,16 @@ class Loess(BaseTransformer):
         super().__init__(dims)
         self.window = window
         self.degree = degree
+        self.center = center
 
     def to_spec_kwargs(self) -> dict[str, Any]:
-        """Serialize window, degree and dims into plain-dict kwargs."""
-        return {"window": self.window, "degree": self.degree, "dims": self.dims}
+        """Serialize window, degree, centering and dims into plain kwargs."""
+        return {
+            "window": self.window,
+            "degree": self.degree,
+            "dims": self.dims,
+            "center": self.center,
+        }
 
     def compute(self, X: Any) -> xr.Dataset:
         """Record window and degree (the only fitted knowledge)."""
@@ -389,7 +399,11 @@ class Loess(BaseTransformer):
             "loess",
             self.dims,
             scaled_from,
-            attrs={"window": self.window, "degree": self.degree},
+            attrs={
+                "window": self.window,
+                "degree": self.degree,
+                "center": int(self.center),
+            },
         )
 
     def _smooth_dim(self, X: Any) -> str:
@@ -402,14 +416,11 @@ class Loess(BaseTransformer):
         return dims[0]
 
     @staticmethod
-    def _tricube(window: int) -> xr.DataArray:
-        """Tricube kernel weights over lag positions: weight 1 at the newest."""
-        distances = np.arange(window - 1, -1, -1, dtype=float)  # newest = 0
-        if window > 1:
-            weights = (1 - (distances / (window - 1)) ** 3) ** 3
-        else:
-            weights = np.ones(1)
-        return xr.DataArray(weights, dims="lag")
+    def _tricube(distances: xr.DataArray, max_distance: float) -> xr.DataArray:
+        """Tricube kernel weights over lag distances (0 is the anchor)."""
+        if max_distance > 0:
+            return (1 - (distances / max_distance) ** 3) ** 3
+        return xr.ones_like(distances)
 
     def _transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         if is_symbolic(X):
@@ -417,23 +428,28 @@ class Loess(BaseTransformer):
         attrs = getattr(state, "attrs", {})
         window = int(attrs.get("window", self.window))
         degree = int(attrs.get("degree", self.degree))
+        center = int(attrs.get("center", int(self.center))) == 1
         dim = self._smooth_dim(X)
-        windows = X.rolling({dim: window}).construct({dim: "lag"})
-        weights = self._tricube(window)
+        windows = X.rolling({dim: window}, center=center).construct({dim: "lag"})
+        # lag index of the evaluation anchor: the newest point (trailing) or
+        # the window's middle (centered); |offset| drives the kernel, the
+        # signed offset drives the degree-1 design (a line is exact in it)
+        anchor = window - 1 if not center else window // 2
+        offsets = xr.DataArray(np.arange(window, dtype=float) - anchor, dims="lag")
+        distances = xr.DataArray(np.abs(offsets.values), dims="lag")
+        weights = self._tricube(distances, max_distance=float(window - 1))
         valid = xr.DataArray(np.isfinite(windows.values), dims=windows.dims)
         weights = weights * valid  # drop missing positions from every sum
         total = weights.sum("lag")
         numerator = (windows * weights).sum("lag")
         if degree == 0:
             return numerator / total
-        # local linear fit, centered at the window's end (distance 0):
-        # predict a + b*(distance), where a and b solve the weighted
-        # normal equations in closed form over the lag dim
-        distances = windows.lag.size - 1 - windows.lag
-        weighted = weights * distances
+        # local linear fit evaluated at offset 0: a and b solve the
+        # weighted normal equations in closed form over the lag dim
+        weighted = weights * offsets
         s0 = total
         s1 = weighted.sum("lag")
-        s2 = (weighted * distances).sum("lag")
+        s2 = (weighted * offsets).sum("lag")
         sy = numerator
         szy = (windows * weighted).sum("lag")
         determinant = s0 * s2 - s1 * s1
