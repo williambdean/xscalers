@@ -141,7 +141,7 @@ class Pipeline:
         would silently produce a wrong mapping otherwise.
 
         This is a *diagnostic* view of what the pipeline decided (and the
-        internals behind :meth:`unscale`); model code should call
+        internals behind ``unscale``); model code should call
         ``pipe.unscale(x, var=...)`` rather than applying the pair by hand.
         """
         composed: dict[str, xr.Dataset] = {}
@@ -377,7 +377,7 @@ class Union:
         pairs raise naming the branches. A branch that is not affine makes
         the whole call raise, naming the branch — runs the same
         "refuse rather than return a wrong pair" policy as
-        :meth:`Pipeline.affine`, per variable rather than per structure.
+        ``Pipeline.affine``, per variable rather than per structure.
         """
         composed: dict[str, xr.Dataset] = {}
         owners: dict[str, str] = {}
@@ -414,8 +414,8 @@ class Union:
     def unscale(self, x: Any, *, var: str, state: Mapping[str, Any] | None = None) -> Any:
         """Convert a scaled-space value of ``var`` back into real units.
 
-        Same verb, same semantics as :meth:`Pipeline.unscale`: the composed
-        affine pair from :meth:`affine` for variables owned by affine
+        Same verb, same semantics as ``Pipeline.unscale``: the composed
+        affine pair from ``affine`` for variables owned by affine
         branches. Variables whose owning branch is not affine raise, naming
         the workaround (per-branch inverse) rather than guessing.
         """

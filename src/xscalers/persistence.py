@@ -9,7 +9,8 @@ mix the two.
 
 The one case that is *not* a one-liner today is appending state into an
 existing (large) zarr store: ``DataTree.to_zarr(group=...)`` is not
-implemented upstream. :func:`append_state` works around it by writing each
+implemented upstream. [`append_state`][xscalers.persistence.append_state]
+works around it by writing each
 node's Dataset with ``Dataset.to_zarr(..., group=..., mode="a")``; reading
 back is native: ``xr.open_datatree(store, group="scalers")``.
 """

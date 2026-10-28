@@ -224,7 +224,7 @@ class BaseTransformer(ABC):
         """Fit: DataArrays (and symbolic inputs) directly; containers via dispatch.
 
         Stamps ``spec_sha`` provenance onto the returned state leaves
-        (best-effort; see :func:`_stamp_state`).
+        (best-effort; see ``_stamp_state``).
         """
         from .compose import VariableTransformer
 
@@ -289,7 +289,7 @@ class BaseAffineTransformer(BaseTransformer):
     States carry *statistics* — the entries people think in (``mean``,
     ``std``); ``PAIR`` maps the affine *roles* onto those entries. A role
     with no entry (divisive scalers have no center) defaults to ``0.0``.
-    The composed affine *view* (:meth:`affine_view`) always carries both
+    The composed affine *view* (``affine_view``) always carries both
     roles, so downstream contracts (``affine()``, ``unscale()``) stay total.
     """
 

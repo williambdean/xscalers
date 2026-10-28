@@ -5,18 +5,21 @@ produce identical data anywhere. Sizes are deliberately panel-shaped. Each
 variable's shape is stated as ``var (dims)``; those claims are data-verified
 by ``tests/test_dataset_docstrings.py``:
 
-- :func:`load_national` — ``target (date,)``, ``controls (date,)``, and one
-  series per channel: ``media (date, channel)``.
-- :func:`load_mixed_grain` — ``media_national (date, media)``,
+- [`load_national`][xscalers.datasets.load_national] - ``target (date,)``,
+  ``controls (date,)``, and one series per channel: ``media (date, channel)``.
+- [`load_mixed_grain`][xscalers.datasets.load_mixed_grain] -
+  ``media_national (date, media)``,
   ``media_digital (date, geo, media)``, ``media_tv (date, media)``,
   ``controls_nat (date,)``, ``controls_prod (date, product)``, and
   ``controls (date, product, control)``: the case that motivated per-variable
   dispatch and per-variable dims.
-- :func:`load_media_channels` — ``media (date, channel)`` and
+- [`load_media_channels`][xscalers.datasets.load_media_channels] -
+  ``media (date, channel)`` and
   ``controls (date,)``, the raw-input shape for split-by-channel treatment
   (DataTree inputs remain supported by the library, but real inputs are
   usually just datasets).
-- :func:`load_panel` — a ``(date, product)`` panel with inputs at two grains
+- [`load_panel`][xscalers.datasets.load_panel] - a ``(date, product)`` panel
+  with inputs at two grains
   (shared + per-product) and inputs that differ in character: the case that
   motivates per-variable dispatch at more than one grain.
 """
@@ -134,7 +137,8 @@ def load_panel() -> xr.Dataset:
 
     - ``media_national (date, channel)`` — one series per channel, shared by
       every product. Lifting it to product grain is an upstream xarray op (see
-      :func:`load_mixed_grain`); the point is that a *scaled* shared series
+      [`load_mixed_grain`][xscalers.datasets.load_mixed_grain]); the point
+      is that a *scaled* shared series
       and a *scaled* per-product series keep separate fitted states and
       separate affine pairs.
     - ``media_digital (date, product, digital)`` — per-product, splittable on

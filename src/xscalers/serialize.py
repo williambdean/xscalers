@@ -31,7 +31,10 @@ def _spec_value(value: Any) -> Any:
 
 
 def spec_of(transformer: Any) -> dict[str, Any]:
-    """Public alias of :func:`to_spec`: serialize a transformer instance."""
+    """Serialize a transformer instance.
+
+    Public alias of [`to_spec`][xscalers.serialize.to_spec].
+    """
     return to_spec(transformer)
 
 
