@@ -245,6 +245,35 @@ the invertible way to split one variable into differently-treated pieces, and
 `VariableTransformer(..., remainder="drop")` is the leftover-dropping sibling.
 
 
+## Smoothing: rolling means that work out of sample
+
+`RollingMean` is a causal smoother: a trailing window over the dims named in
+`dims=`, shrinking at the leading edge instead of NaN-ing, so a fresh block
+of data (the out-of-sample block) comes back fully populated using the
+fitted state alone. `fit` records only the window; the transform itself
+draws on nothing but the X it is handed:
+
+```python
+import xarray as xr
+
+from xscalers.datasets import load_national
+from xscalers.preprocessing import RollingMean
+
+national: xr.Dataset = load_national()
+smoother = RollingMean(window=4, dims=("date",))
+state = smoother.fit(national)                 # records window=4 per variable
+smoothed = smoother.transform(national, state)  # lead-in shrinks, never NaN
+```
+
+For continuity across the fit/score boundary, transform the in-sample tail
+concatenated with the out-of-sample block, then slice: a trailing window
+over the new block alone burns in from raw values.
+
+Smoothing is not affine (`Pipeline.affine()` refuses chains that contain
+it), and `inverse_transform` raises honestly, mirroring `Selector`:
+overlapping windows leave the lead-in unrestorable.
+
+
 ## Splitting one variable into differently-treated pieces
 
 Different treatment *within* one media variable (digital vs TV) works by

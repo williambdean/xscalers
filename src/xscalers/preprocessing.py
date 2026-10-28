@@ -41,6 +41,7 @@ __all__ = [
     "Func",  # deprecated alias of FunctionTransformer
     "FunctionTransformer",
     "MeanScaler",
+    "RollingMean",
     "Selector",
     "Splitter",
     "VariableDropper",
@@ -212,6 +213,55 @@ class MeanScaler(_DataDerivedScaler):
     def _stats(self, da: Any) -> dict[str, Any]:
         dims = self._reduce_dims(da)
         return {"mean": da.mean(dim=dims, skipna=True)}
+
+
+@register
+class RollingMean(BaseTransformer):
+    """Trailing rolling mean over named dims — no NaN at the leading edge.
+
+    A causal smoother, written for out-of-sample use: ``transform`` needs
+    only the fitted ``window`` (state) and the X it is handed, never future
+    values. The window shrinks where a series begins (``min_periods=1``
+    semantics), so smoothed series start at the raw first value instead of
+    NaN when transforming a fresh block of data.
+
+    For continuity across the in-sample/out-of-sample boundary, transform
+    the in-sample tail concatenated with the new block and slice after —
+    a trailing window over the OOS block alone burns in from raw values.
+
+    Not affine: ``Pipeline.affine()`` refuses pipelines containing it, and
+    ``inverse_transform`` honestly raises — a rolling mean is a triangular
+    convolution, invertible in principle but not by this library's shared
+    arithmetic. xarray-only: no symbolic (pytensor.xtensor) path.
+    """
+
+    def __init__(self, window: int = 4, dims: tuple[str, ...] | str | None = None):
+        """Take the trailing window length and the dims to roll over."""
+        if window < 1:
+            raise ValueError(f"window must be >= 1; got {window}")
+        super().__init__(dims)
+        self.window = window
+
+    def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize window and dims into plain-dict kwargs."""
+        return {"window": self.window, "dims": self.dims}
+
+    def compute(self, X: Any) -> xr.Dataset:
+        """Record the window (the only fitted knowledge) in the state."""
+        scaled_from = getattr(X, "name", None)
+        return as_state("rolling_mean", self.dims, scaled_from, attrs={"window": self.window})
+
+    def _transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        window = int(getattr(state, "attrs", {}).get("window", self.window))
+        rolled = X.rolling({dim: window for dim in self._reduce_dims(X)}, min_periods=1)
+        return rolled.mean()
+
+    def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        """Smoothing overlaps windows; raising is the contract, not a guess."""
+        raise NonInvertibleError(
+            "RollingMean overlaps windows; inverse_transform cannot honestly "
+            "restore the original series (the lead-in is lost)."
+        )
 
 
 def _positions(labels: Any, values: list[Any]) -> np.ndarray:

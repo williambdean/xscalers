@@ -50,6 +50,7 @@ class TestSpecRegistry:
             preprocessing.Splitter,
             preprocessing.Selector,
             preprocessing.Dropper,
+            preprocessing.RollingMean,
         ):
             assert cls.__name__ in REGISTRY
 
