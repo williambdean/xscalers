@@ -1,6 +1,6 @@
 [project]
 name = "xscalers"
-version = "0.1.0"
+version = "0.2.0"
 description = "sklearn-shaped, dim-aware scaling transformers for xarray and pytensor.xtensor"
 readme = "README.md"
 authors = [
