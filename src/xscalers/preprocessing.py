@@ -31,15 +31,18 @@ from .core import (
     NonInvertibleError,
     _stamp_state,
     as_state,
+    is_symbolic,
     register,
 )
 
 __all__ = [
     "Derive",
     "Dropper",  # deprecated alias of VariableDropper
+    "EwmSmooth",
     "FixedScaler",
     "Func",  # deprecated alias of FunctionTransformer
     "FunctionTransformer",
+    "Loess",
     "MeanScaler",
     "RollingMean",
     "Selector",
@@ -252,6 +255,8 @@ class RollingMean(BaseTransformer):
         return as_state("rolling_mean", self.dims, scaled_from, attrs={"window": self.window})
 
     def _transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        if is_symbolic(X):
+            raise NotImplementedError("RollingMean is xarray-only (no symbolic path)")
         window = int(getattr(state, "attrs", {}).get("window", self.window))
         rolled = X.rolling({dim: window for dim in self._reduce_dims(X)}, min_periods=1)
         return rolled.mean()
@@ -261,6 +266,185 @@ class RollingMean(BaseTransformer):
         raise NonInvertibleError(
             "RollingMean overlaps windows; inverse_transform cannot honestly "
             "restore the original series (the lead-in is lost)."
+        )
+
+
+@register
+class EwmSmooth(BaseTransformer):
+    """Causal exponential smoothing: ``s_t = a*x_t + (1-a)*s_{t-1}``.
+
+    Seeds at the first value (``s_0 = x_0``), so smoothing a fresh block of
+    data burns in from that block's own values and never yields NaN, mirroring
+    ``RollingMean``. Out-of-sample: ``transform`` needs only the fitted
+    ``alpha`` (state) and the X it is handed; for boundary continuity concat
+    the in-sample tail with the new block and slice afterwards.
+
+    One named dim to smooth over: ``dims=("date",)`` or equivalent; an
+    ambiguous ``dims=None`` on multi-dim data raises. Internal NaNs in X
+    propagate through the recursion (a missing value never recovers).
+
+    Not affine: ``Pipeline.affine()`` refuses pipelines containing it, and
+    ``inverse_transform`` honestly raises. xarray-only: no symbolic
+    (``pytensor.xtensor``) path.
+    """
+
+    def __init__(self, alpha: float = 0.5, dims: tuple[str, ...] | str | None = None):
+        """Take the recursion weight ``alpha`` in ``(0, 1]`` and the dim."""
+        if not 0 < alpha <= 1:
+            raise ValueError(f"alpha must be in (0, 1]; got {alpha}")
+        super().__init__(dims)
+        self.alpha = alpha
+
+    def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize alpha and dims into plain-dict kwargs."""
+        return {"alpha": self.alpha, "dims": self.dims}
+
+    def compute(self, X: Any) -> xr.Dataset:
+        """Record the recursion weight (the only fitted knowledge)."""
+        if is_symbolic(X):
+            raise NotImplementedError("EwmSmooth is xarray-only (no symbolic path)")
+        self._smooth_dim(X)
+        scaled_from = getattr(X, "name", None)
+        return as_state("ewm", self.dims, scaled_from, attrs={"alpha": self.alpha})
+
+    def _smooth_dim(self, X: Any) -> str:
+        """Resolve the single dim the recursion runs along."""
+        dims = self._reduce_dims(X)
+        if len(dims) != 1:
+            raise ValueError(
+                f"EwmSmooth smooths exactly one dim; resolved {dims}. Pass dims=<dim name> explicitly."
+            )
+        return dims[0]
+
+    def _transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        if is_symbolic(X):
+            raise NotImplementedError("EwmSmooth is xarray-only (no symbolic path)")
+        alpha = float(getattr(state, "attrs", {}).get("alpha", self.alpha))
+        axis = X.get_axis_num(self._smooth_dim(X))
+        values = np.moveaxis(np.asarray(X, dtype=float), axis, 0)
+        decay = 1.0 - alpha
+        out = np.empty(values.shape, dtype=float)
+        out[0] = values[0]
+        prev = out[0]
+        for t in range(1, values.shape[0]):
+            prev = alpha * values[t] + decay * prev
+            out[t] = prev
+        out = np.moveaxis(out, 0, axis)
+        return xr.DataArray(out, coords=X.coords, dims=X.dims)
+
+    def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        """Smoothing mixes history; raising is the contract, not a guess."""
+        raise NonInvertibleError(
+            "EwmSmooth recursively mixes history; inverse_transform cannot "
+            "honestly restore the original series (the seed is lost)."
+        )
+
+
+@register
+class Loess(BaseTransformer):
+    """Causal (one-sided) local regression over a trailing window.
+
+    Each position's value is a weighted least-squares fit of the trailing
+    ``window`` points (tricube weights decaying with lag distance), evaluated
+    at the current point, so it is causal and out-of-sample safe exactly like
+    ``RollingMean``: lead-in windows shrink and are renormalized, no NaN.
+    ``degree=1`` is the loess-like local linear fit, ``degree=0`` is the
+    kernel-weighted trailing mean.
+
+    One named dim to regress along; ambiguous ``dims=None`` on multi-dim
+    data raises. Missing values inside a window are excluded (weights
+    renormalized); a window with no valid points falls back to pure xarray
+    arithmetic honestly (NaN out).
+
+    Not affine: ``Pipeline.affine()`` refuses pipelines containing it, and
+    ``inverse_transform`` honestly raises. xarray-only: no symbolic path.
+    """
+
+    def __init__(
+        self,
+        window: int = 4,
+        degree: int = 1,
+        dims: tuple[str, ...] | str | None = None,
+    ):
+        """Take the trailing window length, the fit degree (0 | 1), and the dim."""
+        if window < 1:
+            raise ValueError(f"window must be >= 1; got {window}")
+        if degree not in (0, 1):
+            raise ValueError(f"degree must be 0 or 1; got {degree}")
+        super().__init__(dims)
+        self.window = window
+        self.degree = degree
+
+    def to_spec_kwargs(self) -> dict[str, Any]:
+        """Serialize window, degree and dims into plain-dict kwargs."""
+        return {"window": self.window, "degree": self.degree, "dims": self.dims}
+
+    def compute(self, X: Any) -> xr.Dataset:
+        """Record window and degree (the only fitted knowledge)."""
+        if is_symbolic(X):
+            raise NotImplementedError("Loess is xarray-only (no symbolic path)")
+        self._smooth_dim(X)
+        scaled_from = getattr(X, "name", None)
+        return as_state(
+            "loess",
+            self.dims,
+            scaled_from,
+            attrs={"window": self.window, "degree": self.degree},
+        )
+
+    def _smooth_dim(self, X: Any) -> str:
+        """Resolve the single dim the regression runs along."""
+        dims = self._reduce_dims(X)
+        if len(dims) != 1:
+            raise ValueError(
+                f"Loess smooths exactly one dim; resolved {dims}. Pass dims=<dim name> explicitly."
+            )
+        return dims[0]
+
+    @staticmethod
+    def _tricube(window: int) -> xr.DataArray:
+        """Tricube kernel weights over lag positions: weight 1 at the newest."""
+        distances = np.arange(window - 1, -1, -1, dtype=float)  # newest = 0
+        if window > 1:
+            weights = (1 - (distances / (window - 1)) ** 3) ** 3
+        else:
+            weights = np.ones(1)
+        return xr.DataArray(weights, dims="lag")
+
+    def _transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        if is_symbolic(X):
+            raise NotImplementedError("Loess is xarray-only (no symbolic path)")
+        attrs = getattr(state, "attrs", {})
+        window = int(attrs.get("window", self.window))
+        degree = int(attrs.get("degree", self.degree))
+        dim = self._smooth_dim(X)
+        windows = X.rolling({dim: window}).construct({dim: "lag"})
+        weights = self._tricube(window)
+        valid = xr.DataArray(np.isfinite(windows.values), dims=windows.dims)
+        weights = weights * valid  # drop missing positions from every sum
+        total = weights.sum("lag")
+        numerator = (windows * weights).sum("lag")
+        if degree == 0:
+            return numerator / total
+        # local linear fit, centered at the window's end (distance 0):
+        # predict a + b*(distance), where a and b solve the weighted
+        # normal equations in closed form over the lag dim
+        distances = windows.lag.size - 1 - windows.lag
+        weighted = weights * distances
+        s0 = total
+        s1 = weighted.sum("lag")
+        s2 = (weighted * distances).sum("lag")
+        sy = numerator
+        szy = (windows * weighted).sum("lag")
+        determinant = s0 * s2 - s1 * s1
+        intercept = (sy * s2 - szy * s1) / determinant
+        return xr.where(determinant > 0, intercept, numerator / total)
+
+    def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
+        """Overlapping local fits overlap information; raising is the contract."""
+        raise NonInvertibleError(
+            "Loess fits overlapping windows; inverse_transform cannot "
+            "honestly restore the original series (the lead-in is lost)."
         )
 
 

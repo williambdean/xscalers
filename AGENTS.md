@@ -68,7 +68,7 @@ class BaseTransformer:
 
 | xscalers | sklearn | holds |
 | --- | --- | --- |
-| `preprocessing` | `preprocessing` | `ZScore`, `MeanScaler`, `FixedScaler`, `FunctionTransformer`, `Derive`, `Splitter`, `Selector`, `VariableDropper`, `RollingMean` |
+| `preprocessing` | `preprocessing` | `ZScore`, `MeanScaler`, `FixedScaler`, `FunctionTransformer`, `Derive`, `Splitter`, `Selector`, `VariableDropper`, `RollingMean`, `EwmSmooth`, `Loess` |
 | `compose` | `compose` | `VariableTransformer` (the ColumnTransformer analog) |
 | `pipeline` | `pipeline` | `Pipeline`, `Union`, `make_pipeline`, `make_union` |
 | `datasets` | `datasets` | `load_national`, `load_mixed_grain`, `load_media_channels` |

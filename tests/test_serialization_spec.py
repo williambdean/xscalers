@@ -51,6 +51,8 @@ class TestSpecRegistry:
             preprocessing.Selector,
             preprocessing.Dropper,
             preprocessing.RollingMean,
+            preprocessing.EwmSmooth,
+            preprocessing.Loess,
         ):
             assert cls.__name__ in REGISTRY
 

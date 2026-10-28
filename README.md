@@ -269,6 +269,30 @@ For continuity across the fit/score boundary, transform the in-sample tail
 concatenated with the out-of-sample block, then slice: a trailing window
 over the new block alone burns in from raw values.
 
+The same contract covers the other causal smoothers: `EwmSmooth` runs
+`s_t = a*x_t + (1-a)*s_{t-1}` seeded at the first value (`alpha` in state,
+`roll` nothing), and `Loess` is a one-sided local regression over a
+trailing window with tricube weights, evaluated at the window's end
+(`degree=1` for the loess-like linear fit, `degree=0` for the
+kernel-weighted trailing mean). Neither needs anything beyond numpy and
+xarray, and both keep the vocabulary above: state-only out-of-sample,
+spec-serializable, lead-in shrinking instead of NaN, honestly
+non-invertible, xarray-only (no symbolic path).
+
+```python
+import xarray as xr
+
+from xscalers.datasets import load_national
+from xscalers.preprocessing import EwmSmooth, Loess, RollingMean
+
+national: xr.Dataset = load_national()
+target = national["target"]
+ewed = EwmSmooth(alpha=0.6, dims=("date",))
+smoothed: xr.DataArray = ewed.transform(target, ewed.fit(target))
+locally = Loess(window=5, degree=1, dims=("date",))
+loessed: xr.DataArray = locally.transform(target, locally.fit(target))
+```
+
 Smoothing is not affine (`Pipeline.affine()` refuses chains that contain
 it), and `inverse_transform` raises honestly, mirroring `Selector`:
 overlapping windows leave the lead-in unrestorable.
