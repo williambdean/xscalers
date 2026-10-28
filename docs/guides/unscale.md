@@ -10,7 +10,7 @@ algebra goes silently wrong.
 
 ## Eager: contributions as xarray
 
-```python
+```python exec="on" source="above" html="on" session="unscale"
 import numpy as np
 
 import xarray as xr
@@ -19,6 +19,8 @@ from xscalers.compose import VariableTransformer
 from xscalers.datasets import load_mixed_grain
 from xscalers.pipeline import Pipeline
 from xscalers.preprocessing import Derive, FixedScaler, FunctionTransformer
+
+xr.set_options(display_expand_data=False)
 
 pipe = Pipeline(
     [
@@ -40,6 +42,7 @@ contrib = xr.DataArray(np.full((104, 4), -0.75), dims=("date", "product"))
 
 y_real = pipe.unscale(contrib, var="tv_per_control")   # one verb; located = exp(-0.75)
 np.testing.assert_allclose(y_real, np.exp(contrib))
+y_real
 ```
 
 ## Symbolic: unscale inside the pymc graph
@@ -47,7 +50,7 @@ np.testing.assert_allclose(y_real, np.exp(contrib))
 Requires the optional `pytensor` extra (`pip install
 "xscalers[pytensor]"`).
 
-```python
+```python exec="on" source="above" session="unscale"
 # requires-pytensor
 import pytensor.xtensor as ptx
 
@@ -63,6 +66,7 @@ state = pipe.fit(data)                                     # fitted pipeline sta
 
 contrib = ptx.xtensor("channel_contrib", dims=("date", "channel"))
 spend_real = pipe.unscale(contrib, var="media", state=state)   # symbolic: contrib * mean
+print(f"symbolic result: {type(spend_real).__name__}")
 ```
 
 !!! note "Requires pytensor"

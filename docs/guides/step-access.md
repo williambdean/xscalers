@@ -5,10 +5,14 @@ step: `pipe["name"]` is the transformer plus its slice of the pipeline
 state, so one fitted transformation can be applied to new data without
 touching the rest of the pipeline.
 
-```python
+```python exec="on" source="above" html="on" session="steps"
+import xarray as xr
+
 from xscalers.datasets import load_national
 from xscalers.pipeline import make_pipeline
 from xscalers.preprocessing import MeanScaler
+
+xr.set_options(display_expand_data=False)
 
 pipe = make_pipeline(MeanScaler(dims=("date",)), MeanScaler(dims=("date",)))
 assert [name for name, _ in pipe.steps] == ["meanscaler", "meanscaler-1"]
@@ -17,6 +21,7 @@ pipe.fit(load_national())                          # sklearn-style fitted pipeli
 bound = pipe["meanscaler"]                         # transformer + fitted state slice
 scaled_again = bound.transform(load_national())    # one fitted step on fresh data
 back = bound.inverse_transform(scaled_again)       # ...and its inverse
+scaled_again
 ```
 
 ## Auto-naming

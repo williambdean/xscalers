@@ -7,7 +7,7 @@ plain Dataset of variables, so pieces become *sibling variables*
 under a piece-specific dim name; `inverse_transform` recombines and restores
 the original coordinate order.
 
-```python
+```python exec="on" source="above" html="on" session="split"
 import numpy as np
 
 from xscalers.compose import VariableTransformer
@@ -42,9 +42,10 @@ pipe = Pipeline(
 )
 state = pipe.fit(ds)
 scaled = pipe.transform(ds, state)
-
 back = pipe.inverse_transform(scaled, state)   # pieces recombine; coords restored
 np.testing.assert_allclose(back["media"], ds["media"])
+
+scaled
 ```
 
 ## Why pieces are siblings

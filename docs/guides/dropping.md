@@ -5,7 +5,7 @@
 from a coordinate dataset-wide (the complement of keeping, which is
 [Selector](#selector)'s job).
 
-```python
+```python exec="on" source="above" html="on" session="drop"
 import xarray as xr
 
 from xscalers.datasets import load_mixed_grain
@@ -17,14 +17,18 @@ prune = VariableDropper(
     labels={"control": ["reference"]},
 )
 pruned = prune.transform(mixed, prune.fit(mixed))
-"media_national" in pruned.data_vars            # False — raw inputs are gone
-"reference" in pruned.coords["control"].values  # False — every variable shrank
+print(
+    f"<ul><li>media_national gone: {'media_national' not in pruned.data_vars}</li>"
+    f"<li>reference gone: {'reference' not in pruned.coords['control'].values}</li></ul>"
+)
+pruned
 ```
 
 The motivating shape is pruning raw inputs once a derived metric supersedes
 them, so later steps never have to enumerate what they don't care about:
 
-```python
+```python exec="on" source="above" session="drop"
+from xscalers.compose import VariableTransformer
 from xscalers.pipeline import Pipeline
 from xscalers.preprocessing import Derive, VariableDropper, ZScore
 
@@ -44,7 +48,7 @@ pipe = Pipeline(
     ]
 )
 model_ready = pipe.fit_transform(mixed)
-sorted(model_ready.data_vars)                   # raw inputs pruned, ratio kept
+print(f"model_ready vars: {sorted(model_ready.data_vars)}")
 ```
 
 ## Honesty about dropped data

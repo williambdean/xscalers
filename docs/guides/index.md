@@ -1,8 +1,8 @@
 # Guides
 
 Hands-on pages for the xscalers workflow, adapted from the README. Every
-code block is the same vocabulary you will use in a notebook or script, and
-the test suite executes them just like the README's blocks.
+executable code block runs at docs build time and shows its real output,
+so the pages can't drift from the code.
 
 | Page | What it covers |
 | --- | --- |

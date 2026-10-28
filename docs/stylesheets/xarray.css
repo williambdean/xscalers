@@ -1,0 +1,73 @@
+/* xarray HTML reprs in MkDocs pages: match Material typography and
+   page width instead of Jupyter defaults */
+
+.xr-wrap {
+  max-width: 100%;
+  font-size: 0.72rem;
+}
+
+/* Zensical's ul/li display rules defeat xarray's display: contents
+   grid plumbing, stacking each var row onto 3-4 lines; restore the
+   notebook layout: one line per variable */
+.xr-sections {
+  display: grid !important;
+  grid-template-columns: max-content auto auto 1fr 0 20px 0 20px !important;
+}
+
+/* xarray indents variable names 25px into their cell; that plus the fixed
+   150px column is what made "Dimensions:" leave a wide hole */
+.xr-wrap .xr-var-name span {
+  padding-left: 10px !important;
+}
+
+/* the dims list "( channel: 3 )" is a ul/li; Zensical's list margins
+   leak in around it, so pin them and trim the piece gaps */
+.xr-dim-list {
+  margin: 0 !important;
+}
+
+.xr-dim-list li {
+  margin: 0 !important;
+  padding: 0 3px;
+}
+
+.xr-section-item,
+.xr-var-list,
+.xr-var-item {
+  display: contents !important;
+}
+
+/* monospace cells inherit Material's code font size */
+.xr-wrap code,
+.xr-wrap pre {
+  font-size: 1em;
+}
+
+/* xarray ships a plain-text fallback <pre> plus a hidden .xr-wrap div,
+   meant to be toggled by Jupyter JS; in Zensical pages the fallback rule
+   loses the cascade, so force the toggle ourselves */
+.xr-text-repr-fallback {
+  display: none !important;
+}
+
+/* xarray's dark-mode block keys off jupyter and pymdown theme vars
+   that Zensical's UI does not define, leaving white repr cards in
+   slate mode; re-point the repr variables at Material's palette */
+body[data-md-color-scheme="slate"] {
+  --xr-background-color: var(--md-default-bg-color, #1e1f22);
+  --xr-background-color-row-even:
+    hsl(from var(--md-default-bg-color, #1e1f22) h s calc(l + 5));
+  --xr-background-color-row-odd:
+    hsl(from var(--md-default-bg-color, #1e1f22) h s calc(l + 15));
+  --xr-font-color0: var(--md-typeset-color, rgba(255, 255, 255, 1));
+  --xr-font-color2: rgba(255, 255, 255, 0.54);
+  --xr-font-color3: rgba(255, 255, 255, 0.38);
+  --xr-border-color: hsl(from var(--md-default-bg-color, #1e1f22) h s calc(l + 10));
+  --xr-disabled-color: hsl(from var(--md-default-bg-color, #1e1f22) h s calc(l + 40));
+}
+
+/* attribute table in the Dataset repr */
+.xr-attrs dt,
+.xr-attrs dd {
+  font-size: 1em;
+}

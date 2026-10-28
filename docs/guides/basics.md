@@ -17,7 +17,7 @@ special casing.
 
 ## Fit and transform
 
-```python
+```python exec="on" source="above" html="on" session="basics"
 import xarray as xr
 
 from xscalers.datasets import load_national
@@ -36,11 +36,12 @@ The fitted state is a value on the record: inspect it, save it, pass it to
 another process. Hand-editing is a manual override (the stamp records the
 recipe, not your edits).
 
-```python
+```python exec="on" source="above" session="basics"
 back = scaler.inverse_transform(scaled, state)
 
 import numpy as np
 np.testing.assert_allclose(back, national["media"])   # round-trips exactly
+print(f"round-trip max abs error: {np.max(np.abs(back - national['media'])).item():.3g}")
 ```
 
 ## Fixed constants
@@ -49,11 +50,15 @@ np.testing.assert_allclose(back, national["media"])   # round-trips exactly
 also serves as a consumer's fixed-scale contract (scale by 1000, divide by a
 documented constant, and so on).
 
-```python
+```python exec="on" source="above" session="basics"
 from xscalers.preprocessing import FixedScaler
+import xarray as xr
+
+xr.set_options(display_expand_data=False)
 
 fixed = FixedScaler(scale=1_000_000)
 scaled = fixed.transform(national["media"], fixed.fit(national["media"]))
+scaled
 ```
 
 ## See also

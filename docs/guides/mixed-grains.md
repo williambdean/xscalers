@@ -4,7 +4,7 @@ Dataset and DataTree inputs are handled per variable, so each variable keeps
 its own fitted state. Mixed-grain inputs need no special casing: fit a
 Dataset and each variable gets its own recipe and stats.
 
-```python
+```python exec="on" source="above" html="on" session="mixed"
 import xarray as xr
 
 from xscalers.compose import VariableTransformer
@@ -22,6 +22,7 @@ transformer = VariableTransformer(
 )
 state = transformer.fit(mixed)                # one Dataset state per variable
 scaled = transformer.transform(mixed, state)  # each var scaled by its own recipe
+mixed
 ```
 
 ## VariableTransformer
@@ -41,3 +42,7 @@ variable name to its own `xr.Dataset`. That is what lets a national series
 and a per-product series live side by side with separate fitted constants,
 and what `Pipeline.affine()` composes into one `(center, scale)` pair per
 variable downstream.
+
+```python exec="on" source="above" html="on" session="mixed"
+state["media_national"]
+```

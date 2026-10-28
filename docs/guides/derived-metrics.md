@@ -12,7 +12,7 @@ share-of-total style derivations.
 
 ## Across grains
 
-```python
+```python exec="on" source="above" html="on" session="derived"
 import numpy as np
 
 import xarray as xr
@@ -23,8 +23,8 @@ from xscalers.pipeline import Pipeline
 from xscalers.preprocessing import Derive, FunctionTransformer, ZScore
 
 mixed: xr.Dataset = load_mixed_grain()
-mixed["media_national"].dims                  # (date, media) — national grain
-mixed["controls_prod"].dims                   # (date, product) — product grain
+print(f"<p>media_national dims: {mixed['media_national'].dims}</p>")
+print(f"<p>controls_prod dims: {mixed['controls_prod'].dims}</p>")
 
 pipe = Pipeline(
     [
@@ -43,10 +43,12 @@ pipe = Pipeline(
 )
 state = pipe.fit(mixed)
 scaled = pipe.transform(mixed, state)
-scaled["tv_per_control"].dims                 # (date, product) — broadcast, then scaled
+print(f"<p>tv_per_control dims: {scaled['tv_per_control'].dims}</p>")
 
 back = pipe.inverse_transform(scaled, state)
 np.testing.assert_allclose(back["controls_prod"], mixed["controls_prod"])
+
+scaled["tv_per_control"]
 ```
 
 Because the z-score reduces over `date` only, each product keeps its own
@@ -59,18 +61,20 @@ The same step derives within one variable too, when the variable carries an
 extra coordinate dimension. `controls (date, product, control)` with
 `control = [level, reference, seasonality]`:
 
-```python
+```python exec="on" source="above" html="on" session="derived"
 # continues above — `mixed` carries over
 from xscalers.preprocessing import Derive
 
 share = Derive(
-    name="level_diff",                              # op="diff" this time:
+    name="level_diff",                        # op="diff" this time:
     left=("controls", {"control": "level"}),  # level minus reference,
     right=("controls", {"control": "reference"}),
-    op="diff",                                      # not a ratio
+    op="diff",                                # not a ratio
 )
 derived = share.transform(mixed, share.fit(mixed))
-derived["level_diff"].dims                       # (date, product)
+print(f"<p>level_diff dims: {derived['level_diff'].dims}</p>")
+
+derived["level_diff"]
 ```
 
 ## The non-affine caveat

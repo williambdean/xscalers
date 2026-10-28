@@ -7,10 +7,11 @@ you'll meet in practice.
 
 `to_netcdf`, next to your recipe:
 
-```python
+```python exec="on" source="above" session="save"
 import os
 
 import numpy as np
+import xarray as xr
 
 from xscalers.datasets import load_national
 from xscalers.preprocessing import MeanScaler
@@ -24,6 +25,7 @@ reloaded = xr.open_dataset("media_state.nc")      # ...read back natively
 scaled = scaler.transform(national["media"], reloaded)
 back = scaler.inverse_transform(scaled, reloaded)
 np.testing.assert_allclose(back, national["media"])
+print("media_state.nc round-trips exactly")
 os.remove("media_state.nc")                       # tidy up after this example
 ```
 
@@ -33,7 +35,7 @@ Append the state tree as groups of the existing store. `append_state` exists
 only because `DataTree.to_zarr(group=...)` is not implemented upstream;
 reading back is native.
 
-```python
+```python exec="on" source="above" session="save"
 from pathlib import Path
 
 import xarray as xr
@@ -59,6 +61,7 @@ reloaded_state = {
     name: node.dataset for name, node in reloaded_tree.children["scale"].children.items()
 }
 scaled_again = transformer.transform(mixed, reloaded_state)
+print(f"reloaded state vars: {sorted(reloaded_state)}")
 import shutil; shutil.rmtree(store)               # tidy up after this example
 ```
 
