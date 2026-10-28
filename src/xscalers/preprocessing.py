@@ -721,21 +721,10 @@ class Derive:
         left: tuple[str, Mapping[str, Any]] | None = None,
         right: tuple[str, Mapping[str, Any]] | None = None,
         *,
-        numerator: tuple[str, Mapping[str, Any]] | None = None,
-        denominator: tuple[str, Mapping[str, Any]] | None = None,
         op: str = "ratio",
         reduce: str | None = None,
     ):
-        """``left op right`` — neutral names over the closed op vocabulary.
-
-        ``numerator``/``denominator`` are deprecated aliases (they only
-        describe ``op="ratio"``); they still load so existing specs and
-        call sites keep working.
-        """
-        if numerator is not None:
-            left = numerator
-        if denominator is not None:
-            right = denominator
+        """``left op right`` — neutral names over the closed op vocabulary."""
         if op not in {"ratio", "diff", "product"}:
             raise ValueError(f"Derive ops are ratio | diff | product; got {op!r}")
         if right is None:
