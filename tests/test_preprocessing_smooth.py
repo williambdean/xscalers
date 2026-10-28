@@ -350,3 +350,36 @@ class TestLoessCentered:
         expected = original.transform(target, original.fit(target))
         assert np.allclose(out.values, expected.values)
         assert state.attrs["center"] is True or state.attrs["center"] == 1
+
+
+class TestAttrsSurvival:
+    """Variable attrs (e.g. units) ride along on smoothing outputs."""
+
+    @pytest.mark.parametrize(
+        "smoother",
+        [
+            RollingMean(window=3),
+            EwmSmooth(alpha=0.5),
+            Loess(window=3, degree=1),
+            Loess(window=3, degree=1, center=True),
+        ],
+        ids=["rolling", "ewm", "loess-trailing", "loess-centered"],
+    )
+    def test_variable_attrs_survive(self, smoother):
+        x = xr.DataArray(
+            np.arange(1.0, 8.0),
+            dims="date",
+            attrs={"units": "degC", "long_name": "temperature"},
+        )
+        before = dict(x.attrs)
+        out = smoother.transform(x, smoother.fit(x))
+        assert out.attrs == {"units": "degC", "long_name": "temperature"}
+        # the input is never touched
+        assert x.attrs == before
+
+    def test_coord_attrs_survive(self, national_ds):
+        target = national_ds["target"]
+        target.coords["date"].attrs = {"description": "daily"}
+        for smoother in (RollingMean(window=3), EwmSmooth(alpha=0.5, dims=("date",))):
+            out = smoother.transform(target, smoother.fit(target))
+            assert out.coords["date"].attrs == {"description": "daily"}

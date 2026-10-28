@@ -259,7 +259,7 @@ class RollingMean(BaseTransformer):
             raise NotImplementedError("RollingMean is xarray-only (no symbolic path)")
         window = int(getattr(state, "attrs", {}).get("window", self.window))
         rolled = X.rolling({dim: window for dim in self._reduce_dims(X)}, min_periods=1)
-        return rolled.mean()
+        return rolled.mean().assign_attrs(X.attrs)
 
     def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         """Smoothing overlaps windows; raising is the contract, not a guess."""
@@ -330,7 +330,7 @@ class EwmSmooth(BaseTransformer):
             prev = alpha * values[t] + decay * prev
             out[t] = prev
         out = np.moveaxis(out, 0, axis)
-        return xr.DataArray(out, coords=X.coords, dims=X.dims)
+        return xr.DataArray(out, coords=X.coords, dims=X.dims).assign_attrs(X.attrs)
 
     def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         """Smoothing mixes history; raising is the contract, not a guess."""
@@ -430,6 +430,7 @@ class Loess(BaseTransformer):
         degree = int(attrs.get("degree", self.degree))
         center = int(attrs.get("center", int(self.center))) == 1
         dim = self._smooth_dim(X)
+        attrs_in = dict(X.attrs)
         windows = X.rolling({dim: window}, center=center).construct({dim: "lag"})
         # lag index of the evaluation anchor: the newest point (trailing) or
         # the window's middle (centered); |offset| drives the kernel, the
@@ -443,7 +444,7 @@ class Loess(BaseTransformer):
         total = weights.sum("lag")
         numerator = (windows * weights).sum("lag")
         if degree == 0:
-            return numerator / total
+            return (numerator / total).assign_attrs(attrs_in)
         # local linear fit evaluated at offset 0: a and b solve the
         # weighted normal equations in closed form over the lag dim
         weighted = weights * offsets

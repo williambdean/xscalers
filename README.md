@@ -251,7 +251,8 @@ the invertible way to split one variable into differently-treated pieces, and
 `dims=`, shrinking at the leading edge instead of NaN-ing, so a fresh block
 of data (the out-of-sample block) comes back fully populated using the
 fitted state alone. `fit` records only the window; the transform itself
-draws on nothing but the X it is handed:
+draws on nothing but the X it is handed, and variable attrs (units,
+`long_name`) ride along on the smoothed output:
 
 ```python
 import xarray as xr
