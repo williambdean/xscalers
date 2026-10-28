@@ -455,7 +455,7 @@ class Loess(BaseTransformer):
         szy = (windows * weighted).sum("lag")
         determinant = s0 * s2 - s1 * s1
         intercept = (sy * s2 - szy * s1) / determinant
-        return xr.where(determinant > 0, intercept, numerator / total)
+        return xr.where(determinant > 0, intercept, numerator / total).assign_attrs(attrs_in)
 
     def _inverse_transform(self, X: Any, state: Mapping[str, xr.DataArray] | xr.Dataset) -> Any:
         """Overlapping local fits overlap information; raising is the contract."""
